@@ -166,7 +166,7 @@ export class BoardPanel {
               execSync('git pull origin main', opts);
               execSync(`git merge --no-ff ${branch} -m "Merge ${branch} into main"`, opts);
               execSync('git push origin main', opts);
-              execSync(`git branch -d ${branch}`, opts);
+              execSync(`git branch -D ${branch}`, opts);
               try { execSync(`git push origin --delete ${branch}`, opts); } catch { /* remote branch may not exist */ }
               delete card.metadata.branch;
               writeCard(this._boardRoot, card);
