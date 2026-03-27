@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
+import { execSync } from 'child_process';
 import {
   getBoardRoot,
   readManifest,
@@ -10,6 +12,7 @@ import {
   loadBoardState,
 } from './io';
 import { Card, WebviewMessage } from './types';
+import { fireHook, extractTitle } from './hooks';
 
 export class BoardPanel {
   public static currentPanel: BoardPanel | undefined;
@@ -75,7 +78,7 @@ export class BoardPanel {
     }
   }
 
-  private _handleMessage(msg: WebviewMessage): void {
+  private async _handleMessage(msg: WebviewMessage): Promise<void> {
     switch (msg.type) {
       case 'ready': {
         this._sendState();
@@ -96,6 +99,11 @@ export class BoardPanel {
         if (!m1.cards[msg.columnId]) m1.cards[msg.columnId] = [];
         m1.cards[msg.columnId].push(id);
         writeManifest(this._boardRoot, m1);
+        fireHook(this._boardRoot, m1, 'card.created', {
+          card_id: id,
+          card_title: '',
+          column: msg.columnId,
+        });
         this._sendState();
         break;
       }
@@ -113,10 +121,14 @@ export class BoardPanel {
       case 'deleteCard': {
         this._suppressNextWatch = true;
         const m2 = readManifest(this._boardRoot);
+        const deletedCard = readCard(this._boardRoot, msg.id);
+        const deletedTitle = deletedCard ? extractTitle(deletedCard.content) : '';
+        let deletedFromColumn = '';
         for (const col of m2.columns) {
           const arr = m2.cards[col.id] ?? [];
           const idx = arr.indexOf(msg.id);
           if (idx !== -1) {
+            deletedFromColumn = col.id;
             arr.splice(idx, 1);
             m2.cards[col.id] = arr;
             break;
@@ -124,13 +136,60 @@ export class BoardPanel {
         }
         writeManifest(this._boardRoot, m2);
         deleteCardFile(this._boardRoot, msg.id);
+        fireHook(this._boardRoot, m2, 'card.deleted', {
+          card_id: msg.id,
+          card_title: deletedTitle,
+          last_column: deletedFromColumn,
+        });
         this._sendState();
         break;
       }
 
       case 'moveCard': {
+        // When moving to done, run git merge workflow if card has a branch
+        if (msg.toColumn === 'done') {
+          const card = readCard(this._boardRoot, msg.id);
+          if (card?.metadata.branch) {
+            const branch = card.metadata.branch;
+            const confirmed = await vscode.window.showWarningMessage(
+              `Merge branch "${branch}" into main and close this card?`,
+              { modal: true },
+              'Merge'
+            );
+            if (confirmed !== 'Merge') {
+              this._sendState();
+              return;
+            }
+            const workspaceRoot = path.dirname(this._boardRoot);
+            try {
+              const opts = { cwd: workspaceRoot, stdio: 'pipe' as const };
+              try { execSync('git stash', opts); } catch { /* nothing to stash */ }
+              execSync('git checkout main', opts);
+              execSync('git pull origin main', opts);
+              execSync(`git merge --no-ff ${branch} -m "Merge ${branch} into main"`, opts);
+              execSync('git push origin main', opts);
+              execSync(`git branch -d ${branch}`, opts);
+              try { execSync(`git push origin --delete ${branch}`, opts); } catch { /* remote branch may not exist */ }
+              delete card.metadata.branch;
+              writeCard(this._boardRoot, card);
+              const mergeManifest = readManifest(this._boardRoot);
+              fireHook(this._boardRoot, mergeManifest, 'card.merged', {
+                card_id: msg.id,
+                card_title: extractTitle(card.content),
+                branch,
+              });
+            } catch (err) {
+              vscode.window.showErrorMessage(`Git merge failed: ${String(err)}`);
+              this._sendState();
+              return;
+            }
+          }
+        }
+
         this._suppressNextWatch = true;
         const m3 = readManifest(this._boardRoot);
+        const movedCard = readCard(this._boardRoot, msg.id);
+        const movedTitle = movedCard ? extractTitle(movedCard.content) : '';
         // Remove from source column
         const src = m3.cards[msg.fromColumn] ?? [];
         const srcIdx = src.indexOf(msg.id);
@@ -143,6 +202,32 @@ export class BoardPanel {
         dst.splice(toIdx, 0, msg.id);
         m3.cards[msg.toColumn] = dst;
         writeManifest(this._boardRoot, m3);
+        fireHook(this._boardRoot, m3, 'card.moved', {
+          card_id: msg.id,
+          card_title: movedTitle,
+          from_column: msg.fromColumn,
+          to_column: msg.toColumn,
+        });
+        if (msg.toColumn === 'review') {
+          fireHook(this._boardRoot, m3, 'card.reviewed', {
+            card_id: msg.id,
+            card_title: movedTitle,
+            from_column: msg.fromColumn,
+            branch: movedCard?.metadata.branch,
+          });
+        }
+        const destColumn = m3.columns.find((c) => c.id === msg.toColumn);
+        if (destColumn?.wip_limit !== null && destColumn?.wip_limit !== undefined) {
+          const destCount = m3.cards[msg.toColumn]?.length ?? 0;
+          if (destCount > destColumn.wip_limit) {
+            fireHook(this._boardRoot, m3, 'wip.violated', {
+              column: msg.toColumn,
+              wip_limit: destColumn.wip_limit,
+              current_count: destCount,
+              card_id: msg.id,
+            });
+          }
+        }
         this._sendState();
         break;
       }
