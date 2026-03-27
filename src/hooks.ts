@@ -33,8 +33,8 @@ export function fireHook(
   event: string,
   payload: Record<string, unknown>
 ): void {
-  const scripts = manifest.hooks[event];
-  if (!scripts || scripts.length === 0) {
+  const scriptNames = manifest.hooks[event];
+  if (!scriptNames || scriptNames.length === 0) {
     return;
   }
 
@@ -44,7 +44,13 @@ export function fireHook(
     ...payload,
   });
 
-  for (const scriptPath of scripts) {
+  for (const scriptName of scriptNames) {
+    const scriptDef = manifest.scripts?.[scriptName];
+    if (!scriptDef) {
+      appendLog(boardRoot, `[hook.failed] ${event} → ${scriptName} (not defined in manifest.scripts)`);
+      continue;
+    }
+    const scriptPath = scriptDef.file;
     const absScript = path.resolve(boardRoot, scriptPath);
     let child;
     try {

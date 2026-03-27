@@ -47,6 +47,7 @@ function initBoard(): void {
     ],
     tags: {},
     cards: { backlog: [], 'in-progress': [], review: [], done: [] },
+    scripts: {},
     hooks: {},
   };
 
