@@ -244,9 +244,31 @@
     });
     delBtn.addEventListener('click', function (e) {
       e.stopPropagation();
-      if (confirm('Delete this card?')) {
-        vscode.postMessage({ type: 'deleteCard', id: id });
+      // VSCode webviews block confirm() — use inline confirmation instead
+      delBtn.style.display = 'none';
+      const confirmBar = document.createElement('div');
+      confirmBar.className = 'delete-confirm';
+      const yesBtn = document.createElement('button');
+      yesBtn.className = 'delete-confirm-yes';
+      yesBtn.textContent = 'Delete?';
+      const noBtn = document.createElement('button');
+      noBtn.className = 'delete-confirm-no';
+      noBtn.textContent = '\u00d7';
+      confirmBar.appendChild(yesBtn);
+      confirmBar.appendChild(noBtn);
+      div.appendChild(confirmBar);
+      function dismiss() {
+        confirmBar.remove();
+        delBtn.style.display = '';
       }
+      yesBtn.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        vscode.postMessage({ type: 'deleteCard', id: id });
+      });
+      noBtn.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        dismiss();
+      });
     });
     div.appendChild(delBtn);
 
