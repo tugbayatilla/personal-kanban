@@ -1,0 +1,8 @@
+{
+  "id": "20260327-c4f2",
+  "content": "#improvement #claude-code\n\n# Add card.reviewed and card.merged hook events\n\nImplemented card.reviewed and card.merged hook events, plus git stash fix. — 2026-03-27\n\nRaised from review of: Implement hook system\n\nAdd dedicated hook events: card.reviewed (when card enters review column) and card.merged (after branch merge on done). Currently only card.moved fires for these transitions, making it impossible to script review/merge-specific automation.",
+  "metadata": {
+    "created_at": "2026-03-27T20:30:00.000Z",
+    "updated_at": "2026-03-27T20:24:49.221Z"
+  }
+}

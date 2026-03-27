@@ -1,0 +1,8 @@
+{
+  "id": "20260327-a012",
+  "content": "#feature\n\n# Card detail view\n\nOpen on card click. Single markdown editor for the full `content` field. Metadata panel (collapsed by default) shows `created_at`, `updated_at`, and current column. Tags extracted from `#tag` tokens and displayed as chips at the bottom.",
+  "metadata": {
+    "created_at": "2026-03-27T22:00:00.000Z",
+    "updated_at": "2026-03-27T22:00:00.000Z"
+  }
+}

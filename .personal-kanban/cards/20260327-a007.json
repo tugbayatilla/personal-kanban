@@ -1,0 +1,8 @@
+{
+  "id": "20260327-a007",
+  "content": "#feature\n\n# Manifest reader\n\nModule that reads and parses `manifest.json`. Returns typed data structures. Validates against schema on load.",
+  "metadata": {
+    "created_at": "2026-03-27T22:00:00.000Z",
+    "updated_at": "2026-03-27T22:00:00.000Z"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "id": "20260327-a025",
+  "content": "#improvement\n\n# Missing card file handling\n\nWhen manifest references a card ID with no corresponding file, show a broken card placeholder in the UI. Do not crash.",
+  "metadata": {
+    "created_at": "2026-03-27T22:00:00.000Z",
+    "updated_at": "2026-03-27T22:00:00.000Z"
+  }
+}

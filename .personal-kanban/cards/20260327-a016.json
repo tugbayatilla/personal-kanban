@@ -1,0 +1,8 @@
+{
+  "id": "20260327-a016",
+  "content": "#feature\n\n# Archive view\n\nRead-only list of cards in the `archive/` folder. Searchable by title and tags.",
+  "metadata": {
+    "created_at": "2026-03-27T22:00:00.000Z",
+    "updated_at": "2026-03-27T22:00:00.000Z"
+  }
+}
