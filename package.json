@@ -10,20 +10,17 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onCommand:personal-kanban.initBoard",
-    "onCommand:personal-kanban.openBoard"
-  ],
+  "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "personal-kanban.initBoard",
-        "title": "Kanban: Init Board"
+        "title": "Personal Kanban: Init Board"
       },
       {
         "command": "personal-kanban.openBoard",
-        "title": "Kanban: Open Board"
+        "title": "Personal Kanban: Open Board"
       }
     ]
   },
