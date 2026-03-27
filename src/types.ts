@@ -4,12 +4,17 @@ export interface Column {
   wip_limit: number | null;
 }
 
+export interface Script {
+  file: string;
+}
+
 export interface Manifest {
   version: number;
   name: string;
   columns: Column[];
   tags: Record<string, { color: string; weight: number }>;
   cards: Record<string, string[]>;
+  scripts: Record<string, Script>;
   hooks: Record<string, string[]>;
 }
 
