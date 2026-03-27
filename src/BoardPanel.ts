@@ -163,6 +163,7 @@ export class BoardPanel {
             const workspaceRoot = path.dirname(this._boardRoot);
             try {
               const opts = { cwd: workspaceRoot, stdio: 'pipe' as const };
+              try { execSync('git stash', opts); } catch { /* nothing to stash */ }
               execSync('git checkout main', opts);
               execSync('git pull origin main', opts);
               execSync(`git merge --no-ff ${branch} -m "Merge ${branch} into main"`, opts);
@@ -171,6 +172,12 @@ export class BoardPanel {
               try { execSync(`git push origin --delete ${branch}`, opts); } catch { /* remote branch may not exist */ }
               delete card.metadata.branch;
               writeCard(this._boardRoot, card);
+              const mergeManifest = readManifest(this._boardRoot);
+              fireHook(this._boardRoot, mergeManifest, 'card.merged', {
+                card_id: msg.id,
+                card_title: extractTitle(card.content),
+                branch,
+              });
             } catch (err) {
               vscode.window.showErrorMessage(`Git merge failed: ${String(err)}`);
               this._sendState();
@@ -201,6 +208,14 @@ export class BoardPanel {
           from_column: msg.fromColumn,
           to_column: msg.toColumn,
         });
+        if (msg.toColumn === 'review') {
+          fireHook(this._boardRoot, m3, 'card.reviewed', {
+            card_id: msg.id,
+            card_title: movedTitle,
+            from_column: msg.fromColumn,
+            branch: movedCard?.metadata.branch,
+          });
+        }
         const destColumn = m3.columns.find((c) => c.id === msg.toColumn);
         if (destColumn?.wip_limit !== null && destColumn?.wip_limit !== undefined) {
           const destCount = m3.cards[msg.toColumn]?.length ?? 0;
