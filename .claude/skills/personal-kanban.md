@@ -127,15 +127,15 @@ If tests are already failing, fix them first and commit: `fix: restore green tes
 ### 5. Implement tests
 Write tests for the new behaviour. All must pass.
 
-### 6. Push the branch
+### 6. Push the branch and move to Review automatically
+
+When implementation is complete, **do not ask — execute immediately**:
+
 ```bash
 git push -u origin {branch-name}
 ```
-Do **not** merge yet. The branch stays open while the card is in Review.
 
-### 7. Move card to Review
-
-Update the manifest:
+Then update the manifest:
 - Remove card ID from `in-progress`.
 - Append card ID to `review`.
 - Write updated manifest.
@@ -226,7 +226,7 @@ When invoked:
 
 - `/personal-kanban` — show board status: all columns, card counts, and card titles
 - `/personal-kanban start` — pick top card from refined/backlog → move to in-progress
-- `/personal-kanban review` — push branch, move active in-progress card to review, append `#claude-code`
+- `/personal-kanban review` — push branch, move active in-progress card to review, append `#claude-code` (also happens automatically at end of implementation)
 - `/personal-kanban done [card-title]` — merge the branch from the card's metadata, move card to done
 - `/personal-kanban list` — list all cards grouped by column with tag, title, and branch (if set)
 - `/personal-kanban new #tag Title` — create a new card directly in in-progress
