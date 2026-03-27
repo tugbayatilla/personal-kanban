@@ -173,7 +173,7 @@ export class BoardPanel {
               delete card.metadata.branch;
               writeCard(this._boardRoot, card);
               const mergeManifest = readManifest(this._boardRoot);
-              fireHook(this._boardRoot, mergeManifest, 'card.merged', {
+              fireHook(this._boardRoot, mergeManifest, 'git.merged', {
                 card_id: msg.id,
                 card_title: extractTitle(card.content),
                 branch,
