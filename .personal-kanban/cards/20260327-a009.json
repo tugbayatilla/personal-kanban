@@ -1,8 +1,0 @@
-{
-  "id": "20260327-a009",
-  "content": "#feature\n\n# Manifest writer\n\nModule that writes `manifest.json` atomically (write to temp file, then rename).",
-  "metadata": {
-    "created_at": "2026-03-27T22:00:00.000Z",
-    "updated_at": "2026-03-27T22:00:00.000Z"
-  }
-}

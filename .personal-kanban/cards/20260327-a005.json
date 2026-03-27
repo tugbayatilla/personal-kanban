@@ -1,8 +1,0 @@
-{
-  "id": "20260327-a005",
-  "content": "#feature\n\n# Board initialisation CLI\n\nA script or extension command that scaffolds a new `kanban/` folder with a valid empty `manifest.json` and empty `cards/`, `archive/`, `logs/`, `scripts/` folders.",
-  "metadata": {
-    "created_at": "2026-03-27T22:00:00.000Z",
-    "updated_at": "2026-03-27T22:00:00.000Z"
-  }
-}

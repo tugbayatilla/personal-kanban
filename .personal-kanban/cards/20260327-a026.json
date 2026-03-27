@@ -1,8 +1,0 @@
-{
-  "id": "20260327-a026",
-  "content": "#improvement\n\n# Orphan card file handling\n\nDetect card files in `cards/` not referenced in manifest. Show in a dedicated \"Orphans\" section or warning panel.",
-  "metadata": {
-    "created_at": "2026-03-27T22:00:00.000Z",
-    "updated_at": "2026-03-27T22:00:00.000Z"
-  }
-}

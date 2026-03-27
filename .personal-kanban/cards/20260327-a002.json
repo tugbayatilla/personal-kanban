@@ -1,8 +1,0 @@
-{
-  "id": "20260327-a002",
-  "content": "#chore\n\n# JSON schema for card file\n\nWrite a JSON Schema file (`card.schema.json`) that validates the card file structure.",
-  "metadata": {
-    "created_at": "2026-03-27T22:00:00.000Z",
-    "updated_at": "2026-03-27T22:00:00.000Z"
-  }
-}

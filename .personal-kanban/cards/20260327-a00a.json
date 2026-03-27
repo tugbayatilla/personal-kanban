@@ -1,8 +1,0 @@
-{
-  "id": "20260327-a00a",
-  "content": "#feature\n\n# Card writer\n\nModule that writes card files atomically. Always updates `metadata.updated_at` on write.",
-  "metadata": {
-    "created_at": "2026-03-27T22:00:00.000Z",
-    "updated_at": "2026-03-27T22:00:00.000Z"
-  }
-}

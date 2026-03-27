@@ -1,8 +1,0 @@
-{
-  "id": "20260327-a010",
-  "content": "#feature\n\n# Board view — drag and drop\n\nImplement card drag-and-drop between columns and within columns. Update manifest on drop.",
-  "metadata": {
-    "created_at": "2026-03-27T22:00:00.000Z",
-    "updated_at": "2026-03-27T22:00:00.000Z"
-  }
-}

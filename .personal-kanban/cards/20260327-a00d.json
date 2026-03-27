@@ -1,8 +1,8 @@
 {
   "id": "20260327-a00d",
-  "content": "#feature\n\n# Manifest file watcher\n\nWatch `manifest.json` for external changes (e.g. git pull, manual edit). Emit internal event to trigger board refresh.",
+  "content": "#feature\n\n# Manifest file watcher\n\nWatch `manifest.json` for external changes (e.g. git pull, manual edit). Emit internal event to trigger board refresh.\n",
   "metadata": {
     "created_at": "2026-03-27T22:00:00.000Z",
-    "updated_at": "2026-03-27T22:00:00.000Z"
+    "updated_at": "2026-03-27T23:50:46.839Z"
   }
 }

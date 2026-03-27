@@ -1,8 +1,0 @@
-{
-  "id": "20260327-a00e",
-  "content": "#feature\n\n# Board view — column rendering\n\nRender columns left-to-right from manifest array. Show column label and WIP limit badge.",
-  "metadata": {
-    "created_at": "2026-03-27T22:00:00.000Z",
-    "updated_at": "2026-03-27T22:00:00.000Z"
-  }
-}
