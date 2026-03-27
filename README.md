@@ -99,7 +99,7 @@ The `manifest.json` is the source of truth. You can edit it directly — the boa
 
 ## Claude Code Integration
 
-This project includes a [`/personal-kanban`](.claude/skills/personal-kanban.md) skill for [Claude Code](https://claude.ai/code). It lets Claude read and manage the board directly — no manual JSON editing required.
+This project includes a `/personal-kanban` skill for [Claude Code](https://claude.ai/code). It lets Claude read and manage the board directly — no manual JSON editing required.
 
 ### Skill commands
 
