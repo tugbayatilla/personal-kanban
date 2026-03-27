@@ -36,7 +36,7 @@ echo "==> Building extension..."
 npm run build
 
 echo "==> Packaging extension..."
-yes | vsce package --out dist/ --allow-missing-repository
+{ yes 2>/dev/null || true; } | vsce package --out dist/ --allow-missing-repository
 
 VSIX_FILE=$(ls -t dist/*.vsix | head -1)
 echo "==> Package created: $VSIX_FILE"
