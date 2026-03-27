@@ -16,6 +16,7 @@ export interface Manifest {
 export interface CardMetadata {
   created_at: string;
   updated_at: string;
+  branch?: string;
 }
 
 export interface Card {

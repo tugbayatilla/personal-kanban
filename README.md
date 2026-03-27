@@ -16,14 +16,14 @@ A file-based personal kanban board for VSCode. The entire board state lives in p
 
 | Command | Description |
 |---|---|
-| `Kanban: Init Board` | Creates `.personal-kanban/` in the workspace root with a default `manifest.json` and `cards/` folder |
-| `Kanban: Open Board` | Opens the Kanban board webview panel |
+| `Personal Kanban: Init Board` | Creates `.personal-kanban/` in the workspace root with a default `manifest.json` and `cards/` folder |
+| `Personal Kanban: Open Board` | Opens the Kanban board webview panel |
 
-Open the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) and type `Kanban` to find both commands.
+Open the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) and type `Personal Kanban` to find both commands.
 
 ## Board Structure
 
-Running `Kanban: Init Board` creates:
+Running `Personal Kanban: Init Board` creates:
 
 ```
 {workspace-root}/
@@ -33,7 +33,46 @@ Running `Kanban: Init Board` creates:
         └── {id}.json   ← one file per card
 ```
 
-The default columns are **Backlog**, **In Progress**, **Review**, and **Done**. To change column names or add columns, edit `manifest.json` directly.
+The default columns are **Backlog**, **In Progress**, **Review**, and **Done**. To change column names, reorder, or add columns, edit `manifest.json` directly.
+
+### manifest.json shape
+
+```json
+{
+  "version": 1,
+  "name": "personal-kanban",
+  "columns": [
+    { "id": "backlog", "label": "Backlog", "wip_limit": null },
+    { "id": "in-progress", "label": "In Progress", "wip_limit": 1 },
+    { "id": "review", "label": "Review", "wip_limit": null },
+    { "id": "done", "label": "Done", "wip_limit": null }
+  ],
+  "tags": {},
+  "cards": {
+    "backlog": ["20260326-b7c2"],
+    "in-progress": [],
+    "review": [],
+    "done": []
+  },
+  "hooks": {}
+}
+```
+
+### Card file shape
+
+```json
+{
+  "id": "20260326-b7c2",
+  "content": "#feature\n\n# Card title\n\nDescription text.",
+  "metadata": {
+    "created_at": "2026-03-26T10:00:00.000Z",
+    "updated_at": "2026-03-26T10:00:00.000Z",
+    "branch": "feature/card-title"
+  }
+}
+```
+
+`metadata.branch` is set when work begins on a card and cleared after the branch is merged. It lets you track multiple in-flight branches across parallel cards.
 
 ### Card IDs
 
@@ -42,8 +81,8 @@ Cards are identified by `YYYYMMDD-xxxx` (UTC date + 4 random hex chars), e.g. `2
 ## Usage
 
 1. Open a project folder in VSCode.
-2. Run `Kanban: Init Board` — this creates the `.personal-kanban/` folder.
-3. Run `Kanban: Open Board` to view the board.
+2. Run `Personal Kanban: Init Board` — this creates the `.personal-kanban/` folder.
+3. Run `Personal Kanban: Open Board` to view the board.
 4. Click **+ Add card** at the bottom of any column to create a card.
 5. **Single-click** a card to read it. **Double-click** to edit.
 6. Press `Ctrl+S` or click away to save. Press `Escape` to discard changes.
@@ -57,6 +96,39 @@ Add `#tagname` anywhere in a card's content. Tags are extracted at render time a
 ### Editing the board manually
 
 The `manifest.json` is the source of truth. You can edit it directly — the board refreshes automatically when the file changes. If `manifest.json` and a card file disagree on column placement, `manifest.json` wins.
+
+## Claude Code Integration
+
+This project includes a [`/personal-kanban`](.claude/skills/personal-kanban.md) skill for [Claude Code](https://claude.ai/code). It lets Claude read and manage the board directly — no manual JSON editing required.
+
+### Skill commands
+
+| Command | Description |
+|---|---|
+| `/personal-kanban` | Show board status: all columns, card counts, and titles |
+| `/personal-kanban list` | List all cards grouped by column with tag, title, and branch |
+| `/personal-kanban start` | Move the top card from Refined (or Backlog) to In Progress |
+| `/personal-kanban review` | Push branch, move active In Progress card to Review |
+| `/personal-kanban done [title]` | Merge the card's branch, move card to Done |
+| `/personal-kanban new #tag Title` | Create a new card directly in In Progress |
+| `/personal-kanban raise #tag Title` | Raise a new card from a review finding |
+
+### Workflow
+
+```
+Backlog → Refined → In Progress → Review → Done
+                         ↑                   ↓
+                    branch saved        branch merged
+                    to card metadata    and deleted
+```
+
+1. `/personal-kanban start` — picks the top refined card, creates a git branch, saves the branch name to `metadata.branch`.
+2. Work is committed on the branch with small, focused commits.
+3. `/personal-kanban review` — pushes the branch and moves the card to Review. The branch is **not merged yet**.
+4. You review the work in your own time. When satisfied, drag the card to Done or run `/personal-kanban done`.
+5. `/personal-kanban done` — reads `metadata.branch` from the card, merges into main, deletes the branch, and clears the branch field.
+
+Multiple cards can be in Review simultaneously, each with their own branch tracked in `metadata.branch`.
 
 ## Development
 
@@ -85,7 +157,7 @@ npm run build
 
 1. Open this repository in VSCode.
 2. Press `F5` — this launches an **Extension Development Host** window.
-3. In that new window, open any folder, then run the `Kanban:` commands.
+3. In that new window, open any folder, then run the `Personal Kanban:` commands.
 
 ### Packaging and installing the VSIX
 
@@ -99,13 +171,13 @@ Package the extension:
 
 ```bash
 vsce package
-# produces personal-kanban-0.0.1.vsix
+# produces personal-kanban-{version}.vsix
 ```
 
 Install the `.vsix` file:
 
 ```bash
-code --install-extension personal-kanban-0.0.1.vsix
+code --install-extension personal-kanban-{version}.vsix
 ```
 
 Or in VSCode: open the Extensions sidebar → `...` menu → **Install from VSIX...** → select the file.
