@@ -1,0 +1,8 @@
+{
+  "id": "20260327-f24b",
+  "content": "#bug #claude-code\n\n# card size \n\nImplemented dynamic card display: card ID (small, muted), H1 title, body text (3-line clamp), tags at bottom. Fixed title extraction to use `# Title` lines. — 2026-03-27\n\ncard does not display its content dynamically.\n\ni would like to see the content, title (which is defined by single # which meand h1)\n\ni would like to see on the card.\n- readonly small info card-id\n- so at the top h1\n- then content part\n- at the bottom hash tags\n\n",
+  "metadata": {
+    "created_at": "2026-03-27T12:55:30.164Z",
+    "updated_at": "2026-03-27T19:12:00.000Z"
+  }
+}

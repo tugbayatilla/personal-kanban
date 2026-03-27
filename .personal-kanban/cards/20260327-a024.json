@@ -1,0 +1,8 @@
+{
+  "id": "20260327-a024",
+  "content": "#improvement\n\n# Unknown tag warning\n\nWhen loading a card whose tags include names not in the manifest registry, show a warning badge on the card and in the detail view.",
+  "metadata": {
+    "created_at": "2026-03-27T22:00:00.000Z",
+    "updated_at": "2026-03-27T22:00:00.000Z"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "id": "20260327-a028",
+  "content": "#feature\n\n# Board initialisation command\n\n`Kanban: Initialise Board` command that creates the full folder structure and a valid empty manifest in the current workspace.",
+  "metadata": {
+    "created_at": "2026-03-27T22:00:00.000Z",
+    "updated_at": "2026-03-27T22:00:00.000Z"
+  }
+}

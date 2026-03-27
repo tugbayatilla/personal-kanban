@@ -1,0 +1,8 @@
+{
+  "id": "20260327-a00b",
+  "content": "#feature\n\n# Orphan and consistency checker\n\nOn board load, run consistency checks. Report orphan card files, ghost manifest entries, and unknown tags. Log warnings.",
+  "metadata": {
+    "created_at": "2026-03-27T22:00:00.000Z",
+    "updated_at": "2026-03-27T22:00:00.000Z"
+  }
+}

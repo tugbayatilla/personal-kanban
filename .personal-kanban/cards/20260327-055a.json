@@ -1,0 +1,8 @@
+{
+  "id": "20260327-055a",
+  "content": "#improvement\n\n# card info in manifest\n\nthe card ids for each column can be kept inside of the columns section.\nexample\n```\n{\n      \"id\": \"backlog\",\n      \"label\": \"Backlog\",\n      \"wip_limit\": null,\n      \"cards\": [<card_id_1>,<card_id_2>]\n\n    }\n```",
+  "metadata": {
+    "created_at": "2026-03-27T12:57:43.482Z",
+    "updated_at": "2026-03-27T18:42:59.345Z"
+  }
+}

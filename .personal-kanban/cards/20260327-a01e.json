@@ -1,0 +1,8 @@
+{
+  "id": "20260327-a01e",
+  "content": "#feature\n\n# Hook dispatcher\n\nModule that reads hook configuration from manifest and executes the relevant scripts for a given event. Runs scripts asynchronously (fire-and-forget).",
+  "metadata": {
+    "created_at": "2026-03-27T22:00:00.000Z",
+    "updated_at": "2026-03-27T22:00:00.000Z"
+  }
+}
