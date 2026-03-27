@@ -27,6 +27,11 @@ npm run typecheck
 echo "==> Running lint..."
 npm run lint
 
+echo "==> Bumping patch version..."
+npm version patch --no-git-tag-version
+NEW_VERSION=$(node -p "require('./package.json').version")
+echo "==> Version bumped to $NEW_VERSION"
+
 echo "==> Building extension..."
 npm run build
 
