@@ -142,6 +142,7 @@
     const content = card.content || '';
     const title = extractTitle(content);
     const tags = extractTags(content);
+    const body = extractBody(content);
 
     const div = document.createElement('div');
     div.className = 'card';
@@ -149,10 +150,22 @@
     div.dataset.column = columnId;
     div.draggable = true;
 
+    const idDiv = document.createElement('div');
+    idDiv.className = 'card-id';
+    idDiv.textContent = id;
+    div.appendChild(idDiv);
+
     const titleDiv = document.createElement('div');
     titleDiv.className = 'card-title';
     titleDiv.textContent = title || '(untitled)';
     div.appendChild(titleDiv);
+
+    if (body) {
+      const bodyDiv = document.createElement('div');
+      bodyDiv.className = 'card-body';
+      bodyDiv.textContent = body;
+      div.appendChild(bodyDiv);
+    }
 
     if (tags.length > 0) {
       const tagsDiv = document.createElement('div');
@@ -371,8 +384,15 @@
 
   function extractTitle(content) {
     const lines = content.split('\n');
-    const first = lines.find(function (l) { return l.trim() !== ''; }) || '';
-    return first.replace(/^#+\s*/, '').trim();
+    const line = lines.find(function (l) { return /^#\s+/.test(l); }) || '';
+    return line.replace(/^#+\s*/, '').trim();
+  }
+
+  function extractBody(content) {
+    const lines = content.split('\n');
+    return lines.filter(function (l) {
+      return !/^#\w+/.test(l) && !/^#\s+/.test(l);
+    }).join('\n').trim();
   }
 
   function extractTags(content) {

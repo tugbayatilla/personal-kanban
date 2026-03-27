@@ -94,11 +94,29 @@ body {
   opacity: 0.4;
 }
 
+.card-id {
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground, rgba(128,128,128,0.6));
+  margin-bottom: 4px;
+  user-select: text;
+}
+
 .card-title {
   font-size: 13px;
-  line-height: 1.5;
+  font-weight: 600;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.card-body {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground, rgba(128,128,128,0.8));
+  margin-top: 5px;
+  line-height: 1.4;
   word-break: break-word;
   white-space: pre-wrap;
+  max-height: 4.2em;
+  overflow: hidden;
 }
 
 .card-tags {
