@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
-import * as path from 'path';
 import {
   getBoardRoot,
   readManifest,
@@ -40,15 +39,15 @@ export class BoardPanel {
     this._panel = panel;
     this._boardRoot = getBoardRoot(workspaceRoot);
 
-    const nonce = crypto.randomBytes(16).toString('hex');
-    this._panel.webview.html = this._getHtml(nonce);
-
     this._panel.onDidDispose(() => this._dispose(), null, this._disposables);
     this._panel.webview.onDidReceiveMessage(
       (msg: WebviewMessage) => this._handleMessage(msg),
       null,
       this._disposables
     );
+
+    const nonce = crypto.randomBytes(16).toString('hex');
+    this._panel.webview.html = this._getHtml(nonce);
 
     this._startWatcher();
   }
@@ -416,6 +415,7 @@ export class BoardPanel {
           '<div class="board-error">Error loading board: ' + escHtml(String(msg.error)) + '<br><br>Run <strong>Kanban: Init Board</strong> to create a new board.</div>';
         return;
       }
+      clearTimeout(readyRetry);
       state = { manifest: msg.manifest, cards: msg.cards };
       if (editingCardId === null) {
         render();
@@ -424,6 +424,13 @@ export class BoardPanel {
   });
 
   vscode.postMessage({ type: 'ready' });
+
+  // Re-send ready if state hasn't arrived within 500ms (handles rare message-drop cases)
+  var readyRetry = setTimeout(function () {
+    if (state === null) {
+      vscode.postMessage({ type: 'ready' });
+    }
+  }, 500);
 
   // ── Rendering ───────────────────────────────────────────────────────────────
 

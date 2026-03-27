@@ -2,12 +2,14 @@
   "name": "personal-kanban",
   "displayName": "Personal Kanban",
   "description": "File-based personal kanban board for VSCode",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "tugbay",
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Other"],
+  "categories": [
+    "Other"
+  ],
   "activationEvents": [
     "onCommand:personal-kanban.initBoard",
     "onCommand:personal-kanban.openBoard"
