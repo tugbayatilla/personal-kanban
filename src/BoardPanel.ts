@@ -40,6 +40,11 @@ export class BoardPanel {
     this._boardRoot = getBoardRoot(workspaceRoot);
 
     this._panel.onDidDispose(() => this._dispose(), null, this._disposables);
+    this._panel.onDidChangeViewState(
+      (e) => { if (e.webviewPanel.visible) this._sendState(); },
+      null,
+      this._disposables
+    );
     this._panel.webview.onDidReceiveMessage(
       (msg: WebviewMessage) => this._handleMessage(msg),
       null,
@@ -602,7 +607,7 @@ export class BoardPanel {
     const ta = document.createElement('textarea');
     ta.className = 'card-editor';
     ta.value = card.content || '';
-    ta.placeholder = 'Card content (markdown)\nFirst line = title  \u00b7  #tag for tags';
+    ta.placeholder = 'Card content (markdown)\\nFirst line = title  \\u00b7  #tag for tags';
 
     function autoGrow() {
       ta.style.height = 'auto';
