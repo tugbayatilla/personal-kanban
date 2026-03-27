@@ -2,6 +2,7 @@ export interface Column {
   id: string;
   label: string;
   wip_limit: number | null;
+  cards: string[];
 }
 
 export interface Script {
@@ -13,7 +14,6 @@ export interface Manifest {
   name: string;
   columns: Column[];
   tags: Record<string, { color: string; weight: number }>;
-  cards: Record<string, string[]>;
   scripts: Record<string, Script>;
   hooks: Record<string, string[]>;
 }

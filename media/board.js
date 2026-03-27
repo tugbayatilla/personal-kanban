@@ -68,7 +68,7 @@
   }
 
   function renderColumn(col) {
-    const cardIds = state.manifest.cards[col.id] || [];
+    const cardIds = col.cards || [];
 
     const colEl = document.createElement('div');
     colEl.className = 'column';

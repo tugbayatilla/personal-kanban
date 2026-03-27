@@ -66,7 +66,7 @@ export function loadBoardState(boardRoot: string): {
   const manifest = readManifest(boardRoot);
   const cards: Record<string, Card | null> = {};
   for (const col of manifest.columns) {
-    for (const id of manifest.cards[col.id] ?? []) {
+    for (const id of col.cards ?? []) {
       if (!(id in cards)) {
         cards[id] = readCard(boardRoot, id);
       }

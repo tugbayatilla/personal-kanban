@@ -37,16 +37,15 @@ function initBoard(): void {
   fs.mkdirSync(path.join(boardRoot, 'cards'), { recursive: true });
 
   const manifest: Manifest = {
-    version: 1,
+    version: 2,
     name: path.basename(workspaceRoot),
     columns: [
-      { id: 'backlog', label: 'Backlog', wip_limit: null },
-      { id: 'in-progress', label: 'In Progress', wip_limit: null },
-      { id: 'review', label: 'Review', wip_limit: null },
-      { id: 'done', label: 'Done', wip_limit: null },
+      { id: 'backlog', label: 'Backlog', wip_limit: null, cards: [] },
+      { id: 'in-progress', label: 'In Progress', wip_limit: null, cards: [] },
+      { id: 'review', label: 'Review', wip_limit: null, cards: [] },
+      { id: 'done', label: 'Done', wip_limit: null, cards: [] },
     ],
     tags: {},
-    cards: { backlog: [], 'in-progress': [], review: [], done: [] },
     scripts: {},
     hooks: {},
   };
