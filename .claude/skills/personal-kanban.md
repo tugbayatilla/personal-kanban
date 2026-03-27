@@ -18,8 +18,7 @@ Always start by reading the manifest, then load relevant card files.
 Read: .personal-kanban/manifest.json
 ```
 The manifest contains:
-- `columns[]` — ordered list of `{ id, label, wip_limit }` objects
-- `cards` — object mapping `column_id → [card_id, ...]`
+- `columns[]` — ordered list of `{ id, label, wip_limit, cards }` objects. Each column owns its card IDs directly.
 
 ### Step 2 — Read cards
 For each card ID in a column, read its file:
@@ -86,9 +85,9 @@ This skill is **always active**. Before starting any work:
 
 ### 1. Move card to In Progress
 
-Update the manifest's `cards` object:
-- Remove card ID from its current column array.
-- Append card ID to `in-progress` array.
+Update the manifest's `columns` array:
+- Find the column object containing the card ID, remove it from that column's `cards` array.
+- Find the `in-progress` column object, append the card ID to its `cards` array.
 - Write updated manifest back to `.personal-kanban/manifest.json`.
 - Update `metadata.updated_at` on the card file.
 
@@ -127,17 +126,27 @@ If tests are already failing, fix them first and commit: `fix: restore green tes
 ### 5. Implement tests
 Write tests for the new behaviour. All must pass.
 
-### 6. Push the branch and move to Review automatically
+### 6. Commit, push, and move to Review
 
 When implementation is complete, **do not ask — execute immediately**:
 
+**a. Commit all uncommitted changes**
+```bash
+git add -A
+git commit -m "type: short description"
+```
+If there is nothing to commit (all changes already committed), skip this step.
+
+**b. Push the branch**
 ```bash
 git push -u origin {branch-name}
 ```
 
-Then update the manifest:
-- Remove card ID from `in-progress`.
-- Append card ID to `review`.
+**c. Move card to Review**
+
+Update the manifest:
+- Find the `in-progress` column object, remove the card ID from its `cards` array.
+- Find the `review` column object, append the card ID to its `cards` array.
 - Write updated manifest.
 
 Update the card file:
@@ -150,7 +159,7 @@ Update the card file:
 
 ---
 
-### 8. Done — merge into main (triggered when card moves to Done)
+### 7. Done — merge into main (triggered when card moves to Done)
 
 When the user signals that a card is done (via `/personal-kanban done` or by dragging it to the Done column), perform the merge for that card.
 
@@ -172,8 +181,8 @@ When the user signals that a card is done (via `/personal-kanban done` or by dra
    - Update `metadata.updated_at`.
    - Write the updated card file.
 5. Update the manifest:
-   - Remove card ID from `review`.
-   - Append card ID to `done`.
+   - Find the `review` column object, remove card ID from its `cards` array.
+   - Find the `done` column object, append card ID to its `cards` array.
    - Write updated manifest.
 
 > If multiple cards are in Review, the user must specify which one to mark Done. Read all Review card files to show titles and their branch names before acting.
@@ -185,9 +194,9 @@ When the user signals that a card is done (via `/personal-kanban done` or by dra
 ### Moving a card between columns
 
 1. Read manifest.
-2. Find the card ID in its current column array and remove it.
-3. Append the card ID to the target column array.
-4. Write updated manifest (atomic: write to `.personal-kanban/manifest.json.tmp`, then rename).
+2. Find the column containing the card ID, remove it from that column's `cards` array.
+3. Append the card ID to the target column's `cards` array.
+4. Write updated manifest.
 5. Update `metadata.updated_at` on the card file.
 
 ### Creating a new card
@@ -206,7 +215,7 @@ Card content template:
 Steps:
 1. Write the new card file to `.personal-kanban/cards/{id}.json` with `created_at` and `updated_at` set to current UTC time. Do not set `branch` yet.
 2. Read manifest.
-3. Append the new card ID to the target column array (default: `in-progress`).
+3. Append the new card ID to the target column's `cards` array (default: `in-progress`).
 4. Write updated manifest.
 
 ---
@@ -215,7 +224,7 @@ Steps:
 
 When invoked:
 1. Read `.personal-kanban/manifest.json`.
-2. Read all card files referenced in the manifest.
+2. Read only the card files for the **in-progress** and **refined** columns (not the entire board).
 3. Check **in-progress** — if a card matches the current task, continue from there.
 4. If no match in in-progress → pick the **top card from `refined`** (or `backlog` if refined is empty) → move to `in-progress`.
 5. **If no card exists** → create one in `in-progress` before starting work.
@@ -226,7 +235,7 @@ When invoked:
 
 - `/personal-kanban` — show board status: all columns, card counts, and card titles
 - `/personal-kanban start` — pick top card from refined/backlog → move to in-progress
-- `/personal-kanban review` — push branch, move active in-progress card to review, append `#claude-code` (also happens automatically at end of implementation)
+- `/personal-kanban review` — commit uncommitted work, push branch, move active in-progress card to review, append `#claude-code` (also happens automatically at end of implementation)
 - `/personal-kanban done [card-title]` — merge the branch from the card's metadata, move card to done
 - `/personal-kanban list` — list all cards grouped by column with tag, title, and branch (if set)
 - `/personal-kanban new #tag Title` — create a new card directly in in-progress
@@ -264,7 +273,7 @@ When invoked:
 
 When invoked:
 1. Read `.personal-kanban/manifest.json`
-2. Read all card files listed in the manifest
+2. Read card files for relevant columns only (in-progress and refined; backlog only if needed)
 3. Report a summary (column label + card count + card titles + branch if set)
 4. Execute the requested action
 5. Confirm all changes made to manifest and card files

@@ -96,8 +96,8 @@ export class BoardPanel {
         writeCard(this._boardRoot, card);
         this._suppressNextWatch = true;
         const m1 = readManifest(this._boardRoot);
-        if (!m1.cards[msg.columnId]) m1.cards[msg.columnId] = [];
-        m1.cards[msg.columnId].push(id);
+        const addCol = m1.columns.find((c) => c.id === msg.columnId);
+        if (addCol) addCol.cards.push(id);
         writeManifest(this._boardRoot, m1);
         fireHook(this._boardRoot, m1, 'card.created', {
           card_id: id,
@@ -125,12 +125,10 @@ export class BoardPanel {
         const deletedTitle = deletedCard ? extractTitle(deletedCard.content) : '';
         let deletedFromColumn = '';
         for (const col of m2.columns) {
-          const arr = m2.cards[col.id] ?? [];
-          const idx = arr.indexOf(msg.id);
+          const idx = col.cards.indexOf(msg.id);
           if (idx !== -1) {
             deletedFromColumn = col.id;
-            arr.splice(idx, 1);
-            m2.cards[col.id] = arr;
+            col.cards.splice(idx, 1);
             break;
           }
         }
@@ -191,16 +189,17 @@ export class BoardPanel {
         const movedCard = readCard(this._boardRoot, msg.id);
         const movedTitle = movedCard ? extractTitle(movedCard.content) : '';
         // Remove from source column
-        const src = m3.cards[msg.fromColumn] ?? [];
-        const srcIdx = src.indexOf(msg.id);
-        if (srcIdx !== -1) src.splice(srcIdx, 1);
-        m3.cards[msg.fromColumn] = src;
+        const srcCol = m3.columns.find((c) => c.id === msg.fromColumn);
+        if (srcCol) {
+          const srcIdx = srcCol.cards.indexOf(msg.id);
+          if (srcIdx !== -1) srcCol.cards.splice(srcIdx, 1);
+        }
         // Insert at target position
-        if (!m3.cards[msg.toColumn]) m3.cards[msg.toColumn] = [];
-        const dst = m3.cards[msg.toColumn];
-        const toIdx = Math.max(0, Math.min(msg.toIndex, dst.length));
-        dst.splice(toIdx, 0, msg.id);
-        m3.cards[msg.toColumn] = dst;
+        const dstCol = m3.columns.find((c) => c.id === msg.toColumn);
+        if (dstCol) {
+          const toIdx = Math.max(0, Math.min(msg.toIndex, dstCol.cards.length));
+          dstCol.cards.splice(toIdx, 0, msg.id);
+        }
         writeManifest(this._boardRoot, m3);
         fireHook(this._boardRoot, m3, 'card.moved', {
           card_id: msg.id,
@@ -218,7 +217,7 @@ export class BoardPanel {
         }
         const destColumn = m3.columns.find((c) => c.id === msg.toColumn);
         if (destColumn?.wip_limit !== null && destColumn?.wip_limit !== undefined) {
-          const destCount = m3.cards[msg.toColumn]?.length ?? 0;
+          const destCount = destColumn.cards?.length ?? 0;
           if (destCount > destColumn.wip_limit) {
             fireHook(this._boardRoot, m3, 'wip.violated', {
               column: msg.toColumn,
