@@ -86,7 +86,9 @@ body {
   border-color: var(--vscode-focusBorder, #007acc);
 }
 
-.card:hover .delete-btn {
+.card:hover .delete-btn,
+.card:hover .copy-btn,
+.card:hover .info-btn {
   opacity: 1;
 }
 
@@ -134,16 +136,16 @@ body {
   padding: 1px 5px;
 }
 
-.delete-btn {
+.delete-btn,
+.copy-btn,
+.info-btn {
   position: absolute;
   top: 4px;
-  right: 4px;
   width: 20px;
   height: 20px;
   border: none;
   background: none;
-  color: var(--vscode-errorForeground, #cc3333);
-  font-size: 18px;
+  font-size: 14px;
   line-height: 20px;
   text-align: center;
   cursor: pointer;
@@ -153,8 +155,51 @@ body {
   padding: 0;
 }
 
+.delete-btn {
+  right: 4px;
+  font-size: 18px;
+  color: var(--vscode-errorForeground, #cc3333);
+}
+
+.copy-btn {
+  right: 28px;
+  color: var(--vscode-foreground, #cccccc);
+}
+
+.info-btn {
+  right: 52px;
+  color: var(--vscode-foreground, #cccccc);
+}
+
 .delete-btn:hover {
   background: var(--vscode-inputValidation-errorBackground, rgba(200,0,0,0.1));
+}
+
+.copy-btn:hover,
+.info-btn:hover {
+  background: var(--vscode-list-hoverBackground, rgba(128,128,128,0.1));
+}
+
+.card-metadata-popup {
+  position: absolute;
+  top: 28px;
+  right: 4px;
+  z-index: 100;
+  background: var(--vscode-editorHoverWidget-background, #252526);
+  border: 1px solid var(--vscode-editorHoverWidget-border, #454545);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--vscode-editorHoverWidget-foreground, var(--vscode-foreground));
+  min-width: 180px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  line-height: 1.8;
+  white-space: nowrap;
+}
+
+.card-metadata-popup .meta-label {
+  color: var(--vscode-descriptionForeground, rgba(128,128,128,0.8));
+  margin-right: 4px;
 }
 
 .broken-card {

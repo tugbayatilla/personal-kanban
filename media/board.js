@@ -179,6 +179,61 @@
       div.appendChild(tagsDiv);
     }
 
+    // Info button (display metadata)
+    const infoBtn = document.createElement('button');
+    infoBtn.className = 'info-btn';
+    infoBtn.textContent = '\u24d8';
+    infoBtn.title = 'Card metadata';
+    infoBtn.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+    });
+    infoBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      const existing = div.querySelector('.card-metadata-popup');
+      if (existing) {
+        existing.remove();
+        return;
+      }
+      const meta = (state.cards[id] && state.cards[id].metadata) || {};
+      const popup = document.createElement('div');
+      popup.className = 'card-metadata-popup';
+      function metaRow(label, value) {
+        return '<div><span class="meta-label">' + escHtml(label) + '</span>' + escHtml(value || '—') + '</div>';
+      }
+      popup.innerHTML =
+        metaRow('id:', id) +
+        metaRow('created:', meta.created_at ? new Date(meta.created_at).toLocaleString() : '') +
+        metaRow('updated:', meta.updated_at ? new Date(meta.updated_at).toLocaleString() : '') +
+        (meta.branch ? metaRow('branch:', meta.branch) : '');
+      div.appendChild(popup);
+      function closePopup(ev) {
+        if (!popup.contains(ev.target) && ev.target !== infoBtn) {
+          popup.remove();
+          document.removeEventListener('click', closePopup);
+        }
+      }
+      setTimeout(function () { document.addEventListener('click', closePopup); }, 0);
+    });
+    div.appendChild(infoBtn);
+
+    // Copy button (copy card-id)
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'copy-btn';
+    copyBtn.textContent = '\u29c9';
+    copyBtn.title = 'Copy card ID';
+    copyBtn.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+    });
+    copyBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      navigator.clipboard.writeText(id).then(function () {
+        const prev = copyBtn.textContent;
+        copyBtn.textContent = '\u2713';
+        setTimeout(function () { copyBtn.textContent = prev; }, 1000);
+      });
+    });
+    div.appendChild(copyBtn);
+
     // Delete button
     const delBtn = document.createElement('button');
     delBtn.className = 'delete-btn';
@@ -197,7 +252,7 @@
 
     // Double-click to enter edit mode
     div.addEventListener('dblclick', function (e) {
-      if (e.target === delBtn) return;
+      if (e.target === delBtn || e.target === copyBtn || e.target === infoBtn) return;
       editingCardId = id;
       const editEl = renderCardEditMode(id, card, columnId);
       div.replaceWith(editEl);
