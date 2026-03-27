@@ -174,9 +174,7 @@ Card IDs follow the format `YYYYMMDD-xxxx` where `xxxx` is 4 random lowercase he
 ```json
 {
   "id": "20260326-b7c2",
-  "title": "Implement login flow",
-  "description": "Markdown content here.\n\n- step one\n- step two",
-  "tags": ["bug", "feature"],
+  "content": "# Implement login flow\n\nMarkdown content here.\n\n- step one\n- step two\n\n#bug #feature",
   "metadata": {
     "created_at": "2026-03-26T10:00:00Z",
     "updated_at": "2026-03-26T14:32:00Z"
@@ -186,19 +184,21 @@ Card IDs follow the format `YYYYMMDD-xxxx` where `xxxx` is 4 random lowercase he
 
 **Field rules:**
 
-| Field                 | Type             | Notes                                                                         |
-| --------------------- | ---------------- | ----------------------------------------------------------------------------- |
-| `id`                  | string           | Matches filename. Set once at creation. Never changed.                        |
-| `title`               | string           | Plain text. Required.                                                         |
-| `description`         | string           | Markdown. Optional, defaults to empty string.                                 |
-| `tags`                | array of strings | Each string must match a key in `manifest.json → tags`. Order has no meaning. |
-| `metadata.created_at` | ISO 8601 string  | Set by extension at creation. Never overwritten.                              |
-| `metadata.updated_at` | ISO 8601 string  | Updated by extension on every content change.                                 |
+| Field                 | Type            | Notes                                                                                     |
+| --------------------- | --------------- | ----------------------------------------------------------------------------------------- |
+| `id`                  | string          | Matches filename. Set once at creation. Never changed.                                    |
+| `content`             | string          | Full card content as raw markdown. Title, body, and tags all live here.                   |
+| `metadata.created_at` | ISO 8601 string | Set by extension at creation. Never overwritten.                                          |
+| `metadata.updated_at` | ISO 8601 string | Updated by extension on every content change.                                             |
+
+**Tag extraction:** Tags are `#tagname` tokens found anywhere in `content`. The UI scans the content at render time to find them. Tags are displayed at the bottom of the card. No tags array is stored in the file.
+
+**Title extraction:** The UI uses the first non-empty line of `content` as the card's display title (stripping a leading `#` if present). The full content is shown as-entered in the editor.
 
 **What is NOT in the card file:**
 - Column placement → lives in `manifest.json → cards`
 - Card order within column → position in the manifest array
-- Color → derived from tags at render time
+- Color → derived from tag weights at render time (tag with highest weight wins)
 
 **Self-heal rule:** When the extension loads a card, if the card file's implicit placement (derived from manifest) disagrees with any stale data, the manifest always wins. The extension may rewrite the card file silently to remove any conflicting fields introduced by manual edits.
 
@@ -512,25 +512,25 @@ On board load, the extension performs a consistency check:
 
 ### Core Views
 
-| View             | Description                                                                                                                                       |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Board view**   | Main Kanban board. Columns rendered left-to-right. Cards rendered top-to-bottom within columns. Drag-and-drop to move cards.                      |
-| **Card detail**  | Opens on card click. Editable title, description (with markdown preview), tags. Shows column history and computed metrics if history file exists. |
-| **Archive view** | Read-only list of archived cards. Searchable. Cards are not interactive — archive is final.                                                       |
-| **Log viewer**   | Read-only view of daily log files. Browse by date.                                                                                                |
-| **Metrics view** | Per-card and per-column cycle time. Board-level throughput. Only shown if history files exist.                                                    |
+| View             | Description                                                                                                                                                                                                       |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Board view**   | Main Kanban board. Columns rendered left-to-right. Cards rendered top-to-bottom within columns. Drag-and-drop to move cards.                                                                                      |
+| **Card detail**  | Opens on card click. Single markdown editor for all content. Metadata (`created_at`, `updated_at`, column) shown at top with a collapse/expand toggle. Tags extracted from content displayed at the bottom of the card. Rendered markdown shown as-entered. |
+| **Archive view** | Read-only list of archived cards. Searchable. Cards are not interactive — archive is final.                                                                                                                       |
+| **Log viewer**   | Read-only view of daily log files. Browse by date.                                                                                                                                                                |
+| **Metrics view** | Per-card and per-column cycle time. Board-level throughput. Only shown if history files exist.                                                                                                                    |
 
 ### Extension Commands (Command Palette)
 
-| Command                | Action                                        |
-| ---------------------- | --------------------------------------------- |
-| `Kanban: Open Board`   | Open the board view for the current workspace |
-| `Kanban: New Card`     | Create a new card (prompts for title, column) |
-| `Kanban: Archive Card` | Archive the currently selected card           |
-| `Kanban: Delete Card`  | Permanently delete a card (with confirmation) |
-| `Kanban: Add Column`   | Add a new column to the board                 |
-| `Kanban: Edit Tags`    | Open tag registry editor                      |
-| `Kanban: Open Log`     | Open today's log file                         |
+| Command                | Action                                                                                   |
+| ---------------------- | ---------------------------------------------------------------------------------------- |
+| `Kanban: Open Board`   | Open the board view for the current workspace                                            |
+| `Kanban: New Card`     | Open a new card editor (single markdown box). User picks a column; no separate title prompt. |
+| `Kanban: Archive Card` | Archive the currently selected card                                                      |
+| `Kanban: Delete Card`  | Permanently delete a card (with confirmation)                                            |
+| `Kanban: Add Column`   | Add a new column to the board                                                            |
+| `Kanban: Edit Tags`    | Open tag registry editor                                                                 |
+| `Kanban: Open Log`     | Open today's log file                                                                    |
 
 ### Drag and Drop
 
@@ -585,12 +585,12 @@ The following tasks cover the full implementation. Each task maps to a specific 
 | T-15 | Board view — card rendering   | Render cards in column order. Show title and tags. Compute and apply card color from tag weights.                                        |
 | T-16 | Board view — drag and drop    | Implement card drag-and-drop between columns and within columns. Update manifest on drop.                                                |
 | T-17 | WIP limit enforcement         | On card drop, check WIP limit. If violated, show warning UI. Allow user to cancel or proceed. Fire `wip.violated` hook if user proceeds. |
-| T-18 | Card detail view              | Open on card click. Show and edit title, description (markdown preview toggle), and tags. Show `created_at` and `updated_at`.            |
-| T-19 | New card creation             | Command and UI to create a new card. Generate ID, write card file, add to manifest in chosen column.                                     |
+| T-18 | Card detail view              | Open on card click. Single markdown editor for the full `content` field. Metadata panel (collapsed by default) at top shows `created_at`, `updated_at`, and current column. Tags extracted from `#tag` tokens in content and displayed as chips at the bottom. |
+| T-19 | New card creation             | Command opens a blank single-box markdown editor. User selects target column (dropdown). On save: generate ID, write card file with `content`, add to manifest. |
 | T-20 | Card deletion                 | Command with confirmation dialog. Remove from manifest, delete card file and history file. Fire `card.deleted` hook.                     |
 | T-21 | Card archiving                | Command to archive selected card. Execute archive operation (move files, update manifest). Fire `card.archived` hook.                    |
 | T-22 | Archive view                  | Read-only list of cards in `archive/` folder. Searchable by title and tags.                                                              |
-| T-23 | Tag editor                    | UI to add, edit, and delete tags in the manifest tag registry. Show color picker and weight slider.                                      |
+| T-23 | Tag editor                    | UI to add, edit, and delete tags in the manifest tag registry. Show color picker and weight slider. Tags on cards are authored inline as `#tagname` in the markdown content — no per-card tag picker needed. |
 | T-24 | Column manager                | UI to add, rename, reorder, and delete columns. Prevent deletion of columns that still contain cards.                                    |
 
 ---
