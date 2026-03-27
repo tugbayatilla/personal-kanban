@@ -12,6 +12,7 @@ import {
   loadBoardState,
 } from './io';
 import { Card, WebviewMessage } from './types';
+import { fireHook, extractTitle } from './hooks';
 
 export class BoardPanel {
   public static currentPanel: BoardPanel | undefined;
@@ -98,6 +99,11 @@ export class BoardPanel {
         if (!m1.cards[msg.columnId]) m1.cards[msg.columnId] = [];
         m1.cards[msg.columnId].push(id);
         writeManifest(this._boardRoot, m1);
+        fireHook(this._boardRoot, m1, 'card.created', {
+          card_id: id,
+          card_title: '',
+          column: msg.columnId,
+        });
         this._sendState();
         break;
       }
@@ -115,10 +121,14 @@ export class BoardPanel {
       case 'deleteCard': {
         this._suppressNextWatch = true;
         const m2 = readManifest(this._boardRoot);
+        const deletedCard = readCard(this._boardRoot, msg.id);
+        const deletedTitle = deletedCard ? extractTitle(deletedCard.content) : '';
+        let deletedFromColumn = '';
         for (const col of m2.columns) {
           const arr = m2.cards[col.id] ?? [];
           const idx = arr.indexOf(msg.id);
           if (idx !== -1) {
+            deletedFromColumn = col.id;
             arr.splice(idx, 1);
             m2.cards[col.id] = arr;
             break;
@@ -126,6 +136,11 @@ export class BoardPanel {
         }
         writeManifest(this._boardRoot, m2);
         deleteCardFile(this._boardRoot, msg.id);
+        fireHook(this._boardRoot, m2, 'card.deleted', {
+          card_id: msg.id,
+          card_title: deletedTitle,
+          last_column: deletedFromColumn,
+        });
         this._sendState();
         break;
       }
@@ -166,6 +181,8 @@ export class BoardPanel {
 
         this._suppressNextWatch = true;
         const m3 = readManifest(this._boardRoot);
+        const movedCard = readCard(this._boardRoot, msg.id);
+        const movedTitle = movedCard ? extractTitle(movedCard.content) : '';
         // Remove from source column
         const src = m3.cards[msg.fromColumn] ?? [];
         const srcIdx = src.indexOf(msg.id);
@@ -178,6 +195,24 @@ export class BoardPanel {
         dst.splice(toIdx, 0, msg.id);
         m3.cards[msg.toColumn] = dst;
         writeManifest(this._boardRoot, m3);
+        fireHook(this._boardRoot, m3, 'card.moved', {
+          card_id: msg.id,
+          card_title: movedTitle,
+          from_column: msg.fromColumn,
+          to_column: msg.toColumn,
+        });
+        const destColumn = m3.columns.find((c) => c.id === msg.toColumn);
+        if (destColumn?.wip_limit !== null && destColumn?.wip_limit !== undefined) {
+          const destCount = m3.cards[msg.toColumn]?.length ?? 0;
+          if (destCount > destColumn.wip_limit) {
+            fireHook(this._boardRoot, m3, 'wip.violated', {
+              column: msg.toColumn,
+              wip_limit: destColumn.wip_limit,
+              current_count: destCount,
+              card_id: msg.id,
+            });
+          }
+        }
         this._sendState();
         break;
       }
