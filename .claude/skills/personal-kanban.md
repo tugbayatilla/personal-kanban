@@ -11,18 +11,27 @@ description: Manage tasks using the personal-kanban VSCode extension board. Use 
 
 ## Reading the Board
 
-Always start by reading the manifest, then load **only the cards you need** — never read all cards upfront.
+### Step 1 — Get the next card (minimal read)
 
-### Step 1 — Read manifest
+Always try this first:
+```
+Bash: node .personal-kanban/scripts/next-card.js
+```
+This outputs only the next card's JSON (`in-progress[0]` → `refined[0]` → `backlog[0]`). If it succeeds, you have everything needed to start — skip Step 2.
+
+**Fall back to Step 2 only if:**
+- The script file does not exist, or
+- The script exits with an error (e.g. no cards on the board at all)
+
+### Step 2 — Read manifest (fallback)
+
 ```
 Read: .personal-kanban/manifest.json
 ```
 The manifest contains:
 - `columns[]` — ordered list of `{ id, label, wip_limit, cards }` objects. Each column owns its card IDs directly.
 
-### Step 2 — Read cards (active columns only)
-
-**Default:** Read card files only for `in-progress` and `refined` columns. Do **not** read backlog or done cards unless the user explicitly asks about them.
+Then read card files only for `in-progress` and `refined` columns. Do **not** read backlog or done cards unless the user explicitly asks about them.
 
 When you need a card's title for a specific card ID (e.g. for `/personal-kanban list`), read only that card file:
 ```
