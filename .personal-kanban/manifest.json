@@ -7,6 +7,7 @@
       "label": "Backlog",
       "wip_limit": null,
       "cards": [
+        "20260328-0410",
         "20260327-a00c",
         "20260327-a00d",
         "20260327-a011",
@@ -31,14 +32,16 @@
       "label": "Refined",
       "wip_limit": null,
       "cards": [
-        "20260328-0306"
+        "20260328-0306",
+        "20260328-04db",
+        "20260328-d9a6"
       ]
     },
     {
       "id": "in-progress",
       "label": "In Progress",
       "wip_limit": 1,
-      "cards": []
+      "cards": ["20260328-f5c1"]
     },
     {
       "id": "review",
@@ -72,13 +75,13 @@
   "tags": {},
   "scripts": {
     "card-to-done": {
-      "file": "./scripts/card-to-done.sh"
+      "file": "./scripts/card-to-done.js"
     },
     "wip-alert": {
-      "file": "./scripts/wip-alert.sh"
+      "file": "./scripts/wip-alert.js"
     },
     "card-reviewed": {
-      "file": "./scripts/card-reviewed.sh"
+      "file": "./scripts/card-reviewed.js"
     }
   },
   "hooks": {
