@@ -1,8 +1,0 @@
-{
-  "id": "20260327-a015",
-  "content": "#feature\n\n# Card archiving\n\nCommand to archive selected card. Move card file and history file to `archive/`, remove from manifest, fire `card.archived` hook.",
-  "metadata": {
-    "created_at": "2026-03-27T22:00:00.000Z",
-    "updated_at": "2026-03-27T22:00:00.000Z"
-  }
-}

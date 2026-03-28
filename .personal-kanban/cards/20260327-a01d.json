@@ -1,8 +1,0 @@
-{
-  "id": "20260327-a01d",
-  "content": "#feature\n\n# Metrics view\n\nBoard-level view showing average cycle time per column across all cards with history files.",
-  "metadata": {
-    "created_at": "2026-03-27T22:00:00.000Z",
-    "updated_at": "2026-03-27T22:00:00.000Z"
-  }
-}

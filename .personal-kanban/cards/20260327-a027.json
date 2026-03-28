@@ -1,8 +1,0 @@
-{
-  "id": "20260327-a027",
-  "content": "#improvement\n\n# Atomic write safety\n\nEnsure all manifest and card writes go through temp-file-then-rename to prevent corruption on crash.",
-  "metadata": {
-    "created_at": "2026-03-27T22:00:00.000Z",
-    "updated_at": "2026-03-27T22:00:00.000Z"
-  }
-}

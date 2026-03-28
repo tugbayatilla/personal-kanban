@@ -1,8 +1,0 @@
-{
-  "id": "20260327-f989",
-  "content": "#improvement #claude-code\n\n# card options\n\nAdded copy card-id and display metadata buttons. Both appear on card hover alongside the existing delete button.\n\n- delete card (existing)\n- display metadata (ⓘ button — toggles popup with id, created, updated, branch)\n- copy card-id (⊞ button — copies to clipboard, flashes ✓)\n\nCompleted: 2026-03-27\n",
-  "metadata": {
-    "created_at": "2026-03-27T12:59:38.453Z",
-    "updated_at": "2026-03-27T21:12:44.499Z"
-  }
-}

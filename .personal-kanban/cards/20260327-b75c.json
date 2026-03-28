@@ -1,9 +1,0 @@
-{
-  "id": "20260327-b75c",
-  "content": "#improvement #claude-code\n\n# All metadata visibility on card\n\nImplemented 2026-03-28: all metadata fields now shown in the info popup. Branch always visible (shows — when unset). Extra metadata keys rendered dynamically. Long values wrap instead of overflow.\n",
-  "metadata": {
-    "created_at": "2026-03-27T23:56:58.638Z",
-    "updated_at": "2026-03-28T06:20:00.000Z",
-    "branch": "improvement/metadata-visibility-on-card"
-  }
-}

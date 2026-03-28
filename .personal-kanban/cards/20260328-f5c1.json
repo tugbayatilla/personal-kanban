@@ -1,9 +1,0 @@
-{
-  "id": "20260328-f5c1",
-  "content": "#chore #claude-code\n\n# Convert scripts to cross-platform Node.js\n\nCompleted 2026-03-28. Converted all .sh scripts to .js, added next-card.js, updated hooks.ts to spawn .js via node.\n\nReplace all .sh scripts with .js equivalents so they work on Linux, macOS, and Windows. Add next-card.js to read the first refined card without exposing the full manifest. Update hooks.ts to spawn .js scripts via node.\n",
-  "metadata": {
-    "created_at": "2026-03-28T00:00:00.000Z",
-    "updated_at": "2026-03-28T14:36:29.609Z",
-    "branch": "chore/cross-platform-scripts"
-  }
-}

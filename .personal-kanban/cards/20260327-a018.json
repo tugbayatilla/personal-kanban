@@ -1,8 +1,0 @@
-{
-  "id": "20260327-a018",
-  "content": "#feature\n\n# Column manager\n\nUI to add, rename, reorder, and delete columns. Prevent deletion of columns that still contain cards.",
-  "metadata": {
-    "created_at": "2026-03-27T22:00:00.000Z",
-    "updated_at": "2026-03-27T22:00:00.000Z"
-  }
-}
