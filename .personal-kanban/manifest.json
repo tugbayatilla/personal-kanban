@@ -21,13 +21,13 @@
       "id": "in-progress",
       "label": "In Progress",
       "wip_limit": 1,
-      "cards": ["20260328-c7f2"]
+      "cards": []
     },
     {
       "id": "review",
       "label": "Review",
       "wip_limit": null,
-      "cards": []
+      "cards": ["20260328-c7f2"]
     },
     {
       "id": "done",
