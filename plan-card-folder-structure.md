@@ -1,124 +1,116 @@
-Proposed plan: ignore now.
-
-# Plan: Card Folder Structure & VSCode Config
+# Plan: Card Folder Structure & Split Config
 
 ## Overview
 
-Replace the file-based card format and `manifest.json` with:
-- **Folder-per-card** structure under `.personal-kanban/cards/`
-- **VSCode workspace settings** as the single source of config (columns, tags, hooks, WIP limits, board path)
+Four responsibilities, four places:
+
+| Concern | Where |
+|---|---|
+| Board config (columns, tags, hooks, WIP limits, board path) | VSCode workspace `settings.json` |
+| Board structure (card order per column) | `manifest.json` |
+| Card data (content + activity log) | Folder per card |
+| Board-level audit trail | VSCode Output Channel + `board.log` |
 
 ---
 
 ## New Card Structure
 
-Each card becomes a folder named by its ID:
+Each card becomes a folder named by its ID, containing the card file and its log:
 
 ```
 .personal-kanban/
+  manifest.json
+  board.log                ← central audit log (append-only, all events)
   cards/
     20260328-5bf4/
-      content.md       ← markdown body (no frontmatter)
-      metadata.json    ← all card data + move history
-      activity.log     ← append-only activity log
+      20260328-5bf4.md     ← same format as today (frontmatter + body)
+      20260328-5bf4.log    ← card-level activity log (moved from logs/cards/)
     20260328-d9a6/
-      content.md
-      metadata.json
-      activity.log
+      20260328-d9a6.md
+      20260328-d9a6.log
 ```
 
-### `content.md`
-
-Plain markdown. No frontmatter. Just the card body.
+The `.md` file format is unchanged — YAML frontmatter + markdown body.
 
 ```markdown
+---
+id: 20260328-5bf4
+created_at: 2026-03-28T09:00:00.000Z
+updated_at: 2026-03-28T14:30:00.000Z
+branch: feature/card-folder-structure
+---
+
 #feature #claude-code
 
 # Add folder structure for cards
 
-Each card should be stored as a folder containing separate files
-for content, metadata, and activity.
+Each card stored as a folder containing the card file and its activity log.
 ```
 
-### `metadata.json`
-
-Holds all structured data about the card, including its current column and full move history.
-
-```json
-{
-  "id": "20260328-5bf4",
-  "title": "Add folder structure for cards",
-  "column": "in-progress",
-  "position": 1,
-  "tags": ["feature", "claude-code"],
-  "branch": "feature/card-folder-structure",
-  "createdAt": "2026-03-28T09:00:00.000Z",
-  "updatedAt": "2026-03-28T14:30:00.000Z",
-  "timeline": [
-    { "column": "backlog",     "movedAt": "2026-03-28T09:00:00.000Z" },
-    { "column": "refined",     "movedAt": "2026-03-28T10:00:00.000Z" },
-    { "column": "in-progress", "movedAt": "2026-03-28T14:30:00.000Z" }
-  ]
-}
-```
-
-**Fields:**
-
-| Field       | Type            | Description                                |
-| ----------- | --------------- | ------------------------------------------ |
-| `id`        | string          | Card ID — `YYYYMMDD-xxxx` format           |
-| `title`     | string          | Card title (first heading from content.md) |
-| `column`    | string          | Current column ID                          |
-| `position`  | number          | 0-based index within the column            |
-| `tags`      | string[]        | Tag names (without `#`)                    |
-| `branch`    | string?         | Git branch associated with this card       |
-| `createdAt` | ISO 8601 string | Creation timestamp                         |
-| `updatedAt` | ISO 8601 string | Last modification timestamp                |
-| `timeline`  | array           | Ordered list of column moves, oldest first |
-
-### `activity.log`
-
-Append-only log of all events on this card. One entry per line in plain text.
+The `.log` file is append-only, one entry per line:
 
 ```
 2026-03-28T09:00:00Z  created in backlog
 2026-03-28T10:00:00Z  moved backlog → refined
 2026-03-28T14:30:00Z  moved refined → in-progress
 2026-03-28T14:31:00Z  branch set: feature/card-folder-structure
-2026-03-28T15:00:00Z  content updated
 ```
 
 ---
 
-## VSCode Config
+## manifest.json — Board Structure Only
 
-All board configuration moves into VSCode workspace settings (`settings.json`). No `manifest.json`.
+`manifest.json` is kept but stripped down to board structure only: which cards are in which column and in what order.
 
-### Schema
+```json
+{
+  "version": 3,
+  "columns": {
+    "backlog":     ["20260328-a1bd"],
+    "refined":     ["20260328-5bf4", "20260328-d9a6", "20260328-7235"],
+    "in-progress": [],
+    "review":      [],
+    "done":        ["20260328-c7f2", "20260328-b75c"]
+  }
+}
+```
+
+No column definitions, no tags, no hooks, no WIP limits — those all move to VSCode settings.
+
+---
+
+## VSCode Settings — Board Config
+
+All configuration lives in workspace `settings.json`:
 
 ```json
 {
   "personalKanban.boardPath": ".personal-kanban",
 
   "personalKanban.columns": [
-    { "id": "backlog",     "label": "Backlog",      "wipLimit": null },
-    { "id": "refined",     "label": "Refined",      "wipLimit": null },
-    { "id": "in-progress", "label": "In Progress",  "wipLimit": 3    },
-    { "id": "review",      "label": "Review",       "wipLimit": 1    },
-    { "id": "done",        "label": "Done",         "wipLimit": null }
+    { "id": "backlog",     "label": "Backlog",     "wipLimit": null },
+    { "id": "refined",     "label": "Refined",     "wipLimit": null },
+    { "id": "in-progress", "label": "In Progress", "wipLimit": 3    },
+    { "id": "review",      "label": "Review",      "wipLimit": 1    },
+    { "id": "done",        "label": "Done",        "wipLimit": null }
   ],
 
   "personalKanban.tags": {
-    "bug":        { "color": "#e74c3c" },
-    "feature":    { "color": "#2ecc71" },
-    "improvement":{ "color": "#3498db" },
-    "claude-code":{ "color": "#9b59b6" }
+    "bug":         { "color": "#e74c3c" },
+    "feature":     { "color": "#2ecc71" },
+    "improvement": { "color": "#3498db" },
+    "claude-code": { "color": "#9b59b6" }
   },
 
   "personalKanban.hooks": {
-    "card.done":     { "file": ".personal-kanban/scripts/card-to-done.js"  },
-    "wip.violated":  { "file": ".personal-kanban/scripts/wip-alert.js"     },
-    "card.reviewed": { "file": ".personal-kanban/scripts/card-reviewed.js" }
+    "card.created":      { "file": ".personal-kanban/scripts/card-created.js"   },
+    "card.updated":      { "file": ".personal-kanban/scripts/card-updated.js"   },
+    "card.deleted":      { "file": ".personal-kanban/scripts/card-deleted.js"   },
+    "card.archived":     { "file": ".personal-kanban/scripts/card-archived.js"  },
+    "card.in-progress":  { "file": ".personal-kanban/scripts/card-started.js"   },
+    "card.review":       { "file": ".personal-kanban/scripts/card-reviewed.js"  },
+    "card.done":         { "file": ".personal-kanban/scripts/card-to-done.js"   },
+    "wip.violated":      { "file": ".personal-kanban/scripts/wip-alert.js"      }
   }
 }
 ```
@@ -126,64 +118,84 @@ All board configuration moves into VSCode workspace settings (`settings.json`). 
 ### Settings Reference
 
 #### `personalKanban.boardPath`
-- Type: `string`
-- Default: `".personal-kanban"`
-- Path to the board content folder, relative to the workspace root.
+Path to the board content folder, relative to workspace root. Default: `".personal-kanban"`.
 
 #### `personalKanban.columns`
-- Type: `array`
-- Defines the ordered list of columns on the board.
+Ordered list of columns. Order here defines the visual order on the board.
 
 | Field      | Type           | Description                              |
-| ---------- | -------------- | ---------------------------------------- |
-| `id`       | string         | Unique column identifier (slug)          |
-| `label`    | string         | Display name shown on the board          |
-| `wipLimit` | number or null | Max cards allowed; `null` means no limit |
+|------------|----------------|------------------------------------------|
+| `id`       | string         | Unique column slug                       |
+| `label`    | string         | Display name                             |
+| `wipLimit` | number or null | Max cards in column; `null` = no limit   |
 
 #### `personalKanban.tags`
-- Type: `object`
-- Keys are tag names (without `#`). Values are display config.
+Keys are tag names (without `#`). Values define display config.
 
-| Field   | Type   | Description                 |
-| ------- | ------ | --------------------------- |
-| `color` | string | Hex color for the tag badge |
+| Field   | Type   | Description              |
+|---------|--------|--------------------------|
+| `color` | string | Hex color for tag badge  |
 
 #### `personalKanban.hooks`
-- Type: `object`
-- Keys are event names. Values point to a script file.
+Keys are event names. Script paths are resolved relative to workspace root.
 
-| Event           | Fires when                             |
-| --------------- | -------------------------------------- |
-| `card.done`     | A card is moved to the `done` column   |
-| `wip.violated`  | A column's WIP limit is exceeded       |
-| `card.reviewed` | A card is moved to the `review` column |
+| Event                  | Fires when                                          |
+|------------------------|-----------------------------------------------------|
+| `card.created`         | A new card is created                               |
+| `card.updated`         | A card's content or metadata is saved               |
+| `card.deleted`         | A card is permanently deleted                       |
+| `card.archived`        | A card is archived                                  |
+| `card.<column-slug>`   | A card is moved into that column (any column slug)  |
+| `wip.violated`         | A column's WIP limit is exceeded                    |
 
-Scripts can be `.js` (Node) or `.sh` (shell). The extension resolves paths relative to the workspace root.
+`card.<column-slug>` is dynamic — define a hook for any column by its ID, e.g. `card.in-progress`, `card.review`, `card.done`. Multiple hooks can be registered for the same event.
+
+Scripts receive the card ID as the first argument and can be `.js` (Node) or `.sh` (shell).
+
+---
+
+## Board Log
+
+Every event — regardless of whether the card still exists — is written to two places:
+
+1. **`board.log`** — persistent file at `.personal-kanban/board.log`, append-only.
+2. **VSCode Output Channel** — "Personal Kanban" channel in the Output panel, visible in real time without opening any file.
+
+The Output Channel is ephemeral (cleared on VSCode restart); `board.log` is the durable record.
+
+```
+2026-03-28T09:00:00Z  [card.created]   20260328-5bf4  "Add folder structure for cards"  backlog
+2026-03-28T10:00:00Z  [card.updated]   20260328-5bf4
+2026-03-28T14:30:00Z  [card.in-progress] 20260328-5bf4  refined → in-progress
+2026-03-28T15:00:00Z  [wip.violated]   in-progress  limit=3  count=4
+2026-03-28T16:00:00Z  [card.deleted]   20260328-a1bd  "Some old card"
+```
+
+Card-level events are also written to the card's own `<id>.log`. `board.log` is the authoritative source for events like `card.deleted` where the card folder no longer exists.
 
 ---
 
 ## Board Load Behavior
 
-Without `manifest.json`, the extension builds board state by:
-
-1. Reading `personalKanban.columns` from VSCode settings to get the ordered column list.
-2. Scanning `<boardPath>/cards/*/metadata.json` to load all cards.
-3. Grouping cards by `metadata.column`, sorted by `metadata.position` within each column.
-
-This makes each card fully self-describing — the board state is derived, not stored centrally.
+1. Read `personalKanban.columns` from VSCode settings → column order and config.
+2. Read `manifest.json` → card IDs per column, in order.
+3. For each card ID, read `cards/<id>/<id>.md` → card content and metadata.
 
 ---
 
 ## Migration from Current Format
 
-| Before                                        | After                                       |
-| --------------------------------------------- | ------------------------------------------- |
-| `manifest.json` (columns, hooks, tags)        | `settings.json` (VSCode workspace settings) |
-| `cards/<column>/<id>.md` (frontmatter + body) | `cards/<id>/content.md` + `metadata.json`   |
-| `logs/cards/<id>.log`                         | `cards/<id>/activity.log`                   |
+| Before | After |
+|---|---|
+| `manifest.json` (columns + cards + hooks + tags) | `manifest.json` (cards per column only) + `settings.json` (config) |
+| `cards/<column>/<id>.md` | `cards/<id>/<id>.md` |
+| `logs/cards/<id>.log` | `cards/<id>/<id>.log` |
+| _(no central log)_ | `board.log` + VSCode Output Channel |
 
 Migration steps:
-1. For each card file: extract frontmatter → `metadata.json`, body → `content.md`, existing log → `activity.log`.
-2. Add `timeline` to `metadata.json` from the card's column history (derive from current column if no history).
-3. Copy `manifest.json` columns, tags, hooks → workspace `settings.json`.
-4. Delete `manifest.json` and `logs/` directory.
+1. Move each card file: `cards/<column>/<id>.md` → `cards/<id>/<id>.md`.
+2. Move each log file: `logs/cards/<id>.log` → `cards/<id>/<id>.log`.
+3. Strip `manifest.json` down to `columns` (card ID lists only).
+4. Copy column definitions, tags, hooks from `manifest.json` → workspace `settings.json`.
+5. Create `board.log` (empty).
+6. Delete `logs/` directory.
