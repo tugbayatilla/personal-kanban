@@ -11,7 +11,7 @@ export function getManifestPath(boardRoot: string): string {
 }
 
 export function getCardPath(boardRoot: string, id: string): string {
-  return path.join(boardRoot, 'cards', `${id}.json`);
+  return path.join(boardRoot, 'cards', `${id}.md`);
 }
 
 export function boardExists(boardRoot: string): boolean {
@@ -30,10 +30,55 @@ export function writeManifest(boardRoot: string, manifest: Manifest): void {
   fs.renameSync(tmp, target);
 }
 
+function parseCardMd(raw: string, id: string): Card {
+  const now = new Date().toISOString();
+  const match = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (!match) {
+    // No frontmatter — treat entire file as content
+    return { id, content: raw, metadata: { created_at: now, updated_at: now } };
+  }
+  const fm: Record<string, string> = {};
+  for (const line of match[1].split('\n')) {
+    const colon = line.indexOf(':');
+    if (colon === -1) continue;
+    fm[line.slice(0, colon).trim()] = line.slice(colon + 1).trim();
+  }
+  return {
+    id, // filename is source of truth
+    content: match[2].replace(/^\n/, ''),
+    metadata: {
+      created_at: fm.created_at ?? now,
+      updated_at: fm.updated_at ?? now,
+      ...(fm.branch ? { branch: fm.branch } : {}),
+    },
+  };
+}
+
+function serializeCardMd(card: Card): string {
+  const lines = [
+    '---',
+    `id: ${card.id}`,
+    `created_at: ${card.metadata.created_at}`,
+    `updated_at: ${card.metadata.updated_at}`,
+  ];
+  if (card.metadata.branch) {
+    lines.push(`branch: ${card.metadata.branch}`);
+  }
+  lines.push('---', '');
+  lines.push(card.content);
+  return lines.join('\n');
+}
+
 export function readCard(boardRoot: string, id: string): Card | null {
-  const cardPath = getCardPath(boardRoot, id);
-  if (!fs.existsSync(cardPath)) return null;
-  const raw = fs.readFileSync(cardPath, 'utf-8');
+  const mdPath = getCardPath(boardRoot, id);
+  if (fs.existsSync(mdPath)) {
+    const raw = fs.readFileSync(mdPath, 'utf-8');
+    return parseCardMd(raw, id);
+  }
+  // Fallback: read legacy .json format
+  const jsonPath = path.join(boardRoot, 'cards', `${id}.json`);
+  if (!fs.existsSync(jsonPath)) return null;
+  const raw = fs.readFileSync(jsonPath, 'utf-8');
   return JSON.parse(raw) as Card;
 }
 
@@ -41,8 +86,13 @@ export function writeCard(boardRoot: string, card: Card): void {
   card.metadata.updated_at = new Date().toISOString();
   const target = getCardPath(boardRoot, card.id);
   const tmp = target + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(card, null, 2), 'utf-8');
+  fs.writeFileSync(tmp, serializeCardMd(card), 'utf-8');
   fs.renameSync(tmp, target);
+  // Remove legacy .json file if it exists
+  const jsonPath = path.join(boardRoot, 'cards', `${card.id}.json`);
+  if (fs.existsSync(jsonPath)) {
+    fs.unlinkSync(jsonPath);
+  }
 }
 
 export function appendCardLog(boardRoot: string, cardId: string, line: string): void {
@@ -56,10 +106,10 @@ export function appendCardLog(boardRoot: string, cardId: string, line: string): 
 }
 
 export function deleteCardFile(boardRoot: string, id: string): void {
-  const cardPath = getCardPath(boardRoot, id);
-  if (fs.existsSync(cardPath)) {
-    fs.unlinkSync(cardPath);
-  }
+  const mdPath = getCardPath(boardRoot, id);
+  if (fs.existsSync(mdPath)) fs.unlinkSync(mdPath);
+  const jsonPath = path.join(boardRoot, 'cards', `${id}.json`);
+  if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath);
 }
 
 export function generateId(): string {
