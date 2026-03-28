@@ -3,7 +3,7 @@
   "content": "#improvement\n\n# preserve branch and add per-card logs\n\nKeep metadata.branch on card after merge (do not delete it on done). Add per-card log files at logs/cards/{id}.log tracking every action: created, updated, moved to column, branch merged, deleted.",
   "metadata": {
     "created_at": "2026-03-28T00:00:00.000Z",
-    "updated_at": "2026-03-28T00:00:00.000Z",
+    "updated_at": "2026-03-28T06:20:00.000Z",
     "branch": "improvement/preserve-branch-and-card-logs"
   }
 }

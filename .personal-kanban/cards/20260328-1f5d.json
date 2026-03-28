@@ -3,7 +3,7 @@
   "content": "#bug #claude-code\n\n# branch and git\n\nFixed: check branch existence before merging; skip merge if branch is gone.\n2026-03-28\n\nif there is no branch to merge, skip that action.\n\nhere is the error\n---\nGit merge failed: Error: Command failed: git merge --no-ff improvement/metadata-visibility-on-card -m \"Merge improvement/metadata-visibility-on-card into main\" merge: improvement/metadata-visibility-on-card - not something we can merge\n",
   "metadata": {
     "created_at": "2026-03-28T00:15:39.744Z",
-    "updated_at": "2026-03-28T06:10:00.000Z",
+    "updated_at": "2026-03-28T06:20:00.000Z",
     "branch": "bug/skip-missing-branch-merge"
   }
 }
