@@ -247,11 +247,10 @@ Steps:
 ## Session Start (automatic)
 
 When invoked:
-1. Read `.personal-kanban/manifest.json`.
-2. Read only the card files for the **in-progress** and **refined** columns (not the entire board).
-3. Check **in-progress** — if a card matches the current task, continue from there.
-4. If no match in in-progress → pick the **top card from `refined`** (or `backlog` if refined is empty) → move to `in-progress`.
-5. **If no card exists** → create one in `in-progress` before starting work.
+1. Run `node .personal-kanban/scripts/next-card.js` to get the next card without reading the full manifest. The script checks `in-progress[0]` → `refined[0]` → `backlog[0]` and outputs only that card's JSON.
+2. If the card is already in `in-progress`, continue from there.
+3. If the card is in `refined` or `backlog`, move it to `in-progress` (read manifest only for this update).
+4. **If no card exists** → create one in `in-progress` before starting work.
 
 ---
 

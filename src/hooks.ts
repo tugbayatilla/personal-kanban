@@ -52,9 +52,12 @@ export function fireHook(
     }
     const scriptPath = scriptDef.file;
     const absScript = path.resolve(boardRoot, scriptPath);
+    const isNode = absScript.endsWith('.js');
+    const cmd = isNode ? process.execPath : absScript;
+    const args = isNode ? [absScript] : [];
     let child;
     try {
-      child = spawn(absScript, [], {
+      child = spawn(cmd, args, {
         cwd: boardRoot,
         stdio: ['pipe', 'ignore', 'ignore'],
       });
