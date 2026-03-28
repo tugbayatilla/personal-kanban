@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { Card, Manifest } from './types';
+import { Card, Column, Manifest } from './types';
 
 export function getBoardRoot(workspaceRoot: string): string {
   return path.join(workspaceRoot, '.personal-kanban');
@@ -10,8 +10,15 @@ export function getManifestPath(boardRoot: string): string {
   return path.join(boardRoot, 'manifest.json');
 }
 
-export function getCardPath(boardRoot: string, id: string): string {
-  return path.join(boardRoot, 'cards', `${id}.md`);
+export function resolveCardsFolder(boardRoot: string, column?: Column): string {
+  if (column?.cards_folder) {
+    return path.join(boardRoot, column.cards_folder);
+  }
+  return path.join(boardRoot, 'cards');
+}
+
+export function getCardPath(boardRoot: string, id: string, column?: Column): string {
+  return path.join(resolveCardsFolder(boardRoot, column), `${id}.md`);
 }
 
 export function boardExists(boardRoot: string): boolean {
@@ -69,22 +76,34 @@ function serializeCardMd(card: Card): string {
   return lines.join('\n');
 }
 
-export function readCard(boardRoot: string, id: string): Card | null {
-  const mdPath = getCardPath(boardRoot, id);
-  if (fs.existsSync(mdPath)) {
-    const raw = fs.readFileSync(mdPath, 'utf-8');
-    return parseCardMd(raw, id);
+export function readCard(boardRoot: string, id: string, manifest?: Manifest): Card | null {
+  // Try column-specific folder if manifest provided
+  if (manifest) {
+    const col = manifest.columns.find((c) => c.cards.includes(id));
+    if (col?.cards_folder) {
+      const colPath = path.join(boardRoot, col.cards_folder, `${id}.md`);
+      if (fs.existsSync(colPath)) {
+        return parseCardMd(fs.readFileSync(colPath, 'utf-8'), id);
+      }
+    }
   }
-  // Fallback: read legacy .json format
+  // Default: flat cards/ folder (.md)
+  const mdPath = path.join(boardRoot, 'cards', `${id}.md`);
+  if (fs.existsSync(mdPath)) {
+    return parseCardMd(fs.readFileSync(mdPath, 'utf-8'), id);
+  }
+  // Fallback: legacy .json format
   const jsonPath = path.join(boardRoot, 'cards', `${id}.json`);
   if (!fs.existsSync(jsonPath)) return null;
   const raw = fs.readFileSync(jsonPath, 'utf-8');
   return JSON.parse(raw) as Card;
 }
 
-export function writeCard(boardRoot: string, card: Card): void {
+export function writeCard(boardRoot: string, card: Card, column?: Column): void {
   card.metadata.updated_at = new Date().toISOString();
-  const target = getCardPath(boardRoot, card.id);
+  const folder = resolveCardsFolder(boardRoot, column);
+  fs.mkdirSync(folder, { recursive: true });
+  const target = path.join(folder, `${card.id}.md`);
   const tmp = target + '.tmp';
   fs.writeFileSync(tmp, serializeCardMd(card), 'utf-8');
   fs.renameSync(tmp, target);
@@ -93,6 +112,16 @@ export function writeCard(boardRoot: string, card: Card): void {
   if (fs.existsSync(jsonPath)) {
     fs.unlinkSync(jsonPath);
   }
+}
+
+export function moveCardFile(boardRoot: string, id: string, fromColumn?: Column, toColumn?: Column): void {
+  const srcFolder = resolveCardsFolder(boardRoot, fromColumn);
+  const dstFolder = resolveCardsFolder(boardRoot, toColumn);
+  if (srcFolder === dstFolder) return;
+  const srcPath = path.join(srcFolder, `${id}.md`);
+  if (!fs.existsSync(srcPath)) return;
+  fs.mkdirSync(dstFolder, { recursive: true });
+  fs.renameSync(srcPath, path.join(dstFolder, `${id}.md`));
 }
 
 export function appendCardLog(boardRoot: string, cardId: string, line: string): void {
@@ -105,9 +134,15 @@ export function appendCardLog(boardRoot: string, cardId: string, line: string): 
   fs.appendFileSync(logPath, entry, 'utf-8');
 }
 
-export function deleteCardFile(boardRoot: string, id: string): void {
-  const mdPath = getCardPath(boardRoot, id);
+export function deleteCardFile(boardRoot: string, id: string, column?: Column): void {
+  const folder = resolveCardsFolder(boardRoot, column);
+  const mdPath = path.join(folder, `${id}.md`);
   if (fs.existsSync(mdPath)) fs.unlinkSync(mdPath);
+  // Also clean up flat folder if using a column-specific folder
+  if (column?.cards_folder) {
+    const flatMdPath = path.join(boardRoot, 'cards', `${id}.md`);
+    if (fs.existsSync(flatMdPath)) fs.unlinkSync(flatMdPath);
+  }
   const jsonPath = path.join(boardRoot, 'cards', `${id}.json`);
   if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath);
 }
@@ -128,7 +163,7 @@ export function loadBoardState(boardRoot: string): {
   for (const col of manifest.columns) {
     for (const id of col.cards ?? []) {
       if (!(id in cards)) {
-        cards[id] = readCard(boardRoot, id);
+        cards[id] = readCard(boardRoot, id, manifest);
       }
     }
   }
