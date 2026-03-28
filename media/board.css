@@ -229,9 +229,11 @@ body {
   font-size: 11px;
   color: var(--vscode-editorHoverWidget-foreground, var(--vscode-foreground));
   min-width: 180px;
+  max-width: 280px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.3);
   line-height: 1.8;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-all;
 }
 
 .card-metadata-popup .meta-label {
