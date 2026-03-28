@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Moves a card to the done column in the manifest.
+# Moves a card to the done column in the manifest (v2 format).
 #
 # Usage (standalone):
 #   card-to-done.sh <card_id>
@@ -28,13 +28,15 @@ fi
 
 # Remove card from every column except done, then append to done if not already there
 jq --arg id "$card_id" '
-  .cards = (.cards | to_entries | map(
-    if .key != "done" then .value = (.value | map(select(. != $id)))
-    else . end
-  ) | from_entries) |
-  if (.cards.done | map(select(. == $id)) | length) == 0 then
-    .cards.done = ((.cards.done // []) + [$id])
-  else . end
+  .columns = (.columns | map(
+    if .id == "done" then
+      if (.cards | map(select(. == $id)) | length) == 0
+      then .cards += [$id]
+      else . end
+    else
+      .cards = (.cards | map(select(. != $id)))
+    end
+  ))
 ' "$MANIFEST" > "$MANIFEST.tmp" && mv "$MANIFEST.tmp" "$MANIFEST"
 
 # Update card updated_at
