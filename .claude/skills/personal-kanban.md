@@ -167,23 +167,30 @@ Update the card file:
 When the user signals that a card is done (via `/personal-kanban done` or by dragging it to the Done column), perform the merge for that card.
 
 1. Read the card file and retrieve `metadata.branch`.
-2. Merge and push:
+2. Check whether the branch still exists before merging:
+   ```bash
+   git show-ref --verify --quiet refs/heads/{branch-name} \
+     || git show-ref --verify --quiet refs/remotes/origin/{branch-name}
+   ```
+   - If the branch **does not exist** (command exits non-zero), skip steps 3–4 entirely and proceed directly to step 5. Log a note: "Branch {branch-name} not found — skipping merge."
+   - If the branch **exists**, continue with the merge.
+3. Merge and push:
    ```bash
    git checkout main
    git pull origin main
    git merge --no-ff {branch-name} -m "Merge {branch-name} into main"
    git push origin main
    ```
-3. Clean up the branch:
+4. Clean up the branch:
    ```bash
    git branch -d {branch-name}
    git push origin --delete {branch-name}
    ```
-4. Update the card file:
+5. Update the card file:
    - **Do not remove `metadata.branch`** — it is kept as a permanent record.
    - Update `metadata.updated_at`.
    - Write the updated card file.
-5. Update the manifest:
+6. Update the manifest:
    - Find the `review` column object, remove card ID from its `cards` array.
    - Find the `done` column object, append card ID to its `cards` array.
    - Write updated manifest.
