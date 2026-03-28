@@ -200,11 +200,17 @@
       function metaRow(label, value) {
         return '<div><span class="meta-label">' + escHtml(label) + '</span>' + escHtml(value || '—') + '</div>';
       }
-      popup.innerHTML =
-        metaRow('id:', id) +
+      const knownKeys = ['created_at', 'updated_at', 'branch'];
+      let rows = metaRow('id:', id) +
         metaRow('created:', meta.created_at ? new Date(meta.created_at).toLocaleString() : '') +
         metaRow('updated:', meta.updated_at ? new Date(meta.updated_at).toLocaleString() : '') +
-        (meta.branch ? metaRow('branch:', meta.branch) : '');
+        metaRow('branch:', meta.branch || '');
+      Object.keys(meta).forEach(function (key) {
+        if (!knownKeys.includes(key)) {
+          rows += metaRow(key + ':', String(meta[key]));
+        }
+      });
+      popup.innerHTML = rows;
       div.appendChild(popup);
       function closePopup(ev) {
         if (!popup.contains(ev.target) && ev.target !== infoBtn) {

@@ -31,8 +31,8 @@
       "label": "Refined",
       "wip_limit": null,
       "cards": [
-        "20260327-b75c",
-        "20260328-1f5d"
+        "20260328-1f5d",
+        "20260328-0306"
       ]
     },
     {
@@ -40,14 +40,16 @@
       "label": "In Progress",
       "wip_limit": 1,
       "cards": [
-        "20260328-1f2a"
+        "20260327-b75c"
       ]
     },
     {
       "id": "review",
       "label": "Review",
       "wip_limit": null,
-      "cards": []
+      "cards": [
+        "20260328-1f2a"
+      ]
     },
     {
       "id": "done",
