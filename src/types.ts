@@ -3,6 +3,7 @@ export interface Column {
   label: string;
   wip_limit: number | null;
   cards: string[];
+  folder?: string;
 }
 
 export interface Script {

@@ -6,12 +6,14 @@
       "id": "backlog",
       "label": "Backlog",
       "wip_limit": null,
+      "folder": "cards/backlog",
       "cards": []
     },
     {
       "id": "refined",
       "label": "Refined",
       "wip_limit": null,
+      "folder": "cards/refined",
       "cards": [
         "20260328-d9a6",
         "20260328-5bf4"
@@ -21,18 +23,21 @@
       "id": "in-progress",
       "label": "In Progress",
       "wip_limit": 1,
+      "folder": "cards/in-progress",
       "cards": []
     },
     {
       "id": "review",
       "label": "Review",
       "wip_limit": null,
-      "cards": []
+      "folder": "cards/review",
+      "cards": ["20260328-c7f2"]
     },
     {
       "id": "done",
       "label": "Done",
       "wip_limit": null,
+      "folder": "cards/done",
       "cards": [
         "20260328-04db",
         "20260328-f5c1",
