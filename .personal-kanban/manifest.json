@@ -41,13 +41,13 @@
       "id": "in-progress",
       "label": "In Progress",
       "wip_limit": 1,
-      "cards": ["20260328-f5c1"]
+      "cards": []
     },
     {
       "id": "review",
       "label": "Review",
       "wip_limit": null,
-      "cards": []
+      "cards": ["20260328-f5c1"]
     },
     {
       "id": "done",
