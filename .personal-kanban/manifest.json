@@ -31,7 +31,6 @@
       "label": "Refined",
       "wip_limit": null,
       "cards": [
-        "20260328-1f5d",
         "20260328-0306"
       ]
     },
@@ -39,7 +38,7 @@
       "id": "in-progress",
       "label": "In Progress",
       "wip_limit": 1,
-      "cards": []
+      "cards": ["20260328-1f5d"]
     },
     {
       "id": "review",
