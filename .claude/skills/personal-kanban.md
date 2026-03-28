@@ -11,7 +11,7 @@ description: Manage tasks using the personal-kanban VSCode extension board. Use 
 
 ## Reading the Board
 
-Always start by reading the manifest, then load relevant card files.
+Always start by reading the manifest, then load **only the cards you need** — never read all cards upfront.
 
 ### Step 1 — Read manifest
 ```
@@ -20,8 +20,11 @@ Read: .personal-kanban/manifest.json
 The manifest contains:
 - `columns[]` — ordered list of `{ id, label, wip_limit, cards }` objects. Each column owns its card IDs directly.
 
-### Step 2 — Read cards
-For each card ID in a column, read its file:
+### Step 2 — Read cards (active columns only)
+
+**Default:** Read card files only for `in-progress` and `refined` columns. Do **not** read backlog or done cards unless the user explicitly asks about them.
+
+When you need a card's title for a specific card ID (e.g. for `/personal-kanban list`), read only that card file:
 ```
 Read: .personal-kanban/cards/{id}.json
 ```
@@ -247,7 +250,7 @@ When invoked:
 
 ## Commands
 
-- `/personal-kanban` — show board status: all columns, card counts, and card titles
+- `/personal-kanban` — show board status: all columns with card counts; show titles only for in-progress and refined (not backlog/done)
 - `/personal-kanban start` — pick top card from refined/backlog → move to in-progress
 - `/personal-kanban review` — commit uncommitted work, push branch, move active in-progress card to review, append `#claude-code` (also happens automatically at end of implementation)
 - `/personal-kanban done [card-title]` — merge the branch from the card's metadata, move card to done
