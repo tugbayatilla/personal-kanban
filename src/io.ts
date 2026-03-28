@@ -11,8 +11,8 @@ export function getManifestPath(boardRoot: string): string {
 }
 
 export function resolveCardsFolder(boardRoot: string, column?: Column): string {
-  if (column?.cards_folder) {
-    return path.join(boardRoot, column.cards_folder);
+  if (column?.folder) {
+    return path.join(boardRoot, column.folder);
   }
   return path.join(boardRoot, 'cards');
 }
@@ -80,8 +80,8 @@ export function readCard(boardRoot: string, id: string, manifest?: Manifest): Ca
   // Try column-specific folder if manifest provided
   if (manifest) {
     const col = manifest.columns.find((c) => c.cards.includes(id));
-    if (col?.cards_folder) {
-      const colPath = path.join(boardRoot, col.cards_folder, `${id}.md`);
+    if (col?.folder) {
+      const colPath = path.join(boardRoot, col.folder, `${id}.md`);
       if (fs.existsSync(colPath)) {
         return parseCardMd(fs.readFileSync(colPath, 'utf-8'), id);
       }
@@ -139,7 +139,7 @@ export function deleteCardFile(boardRoot: string, id: string, column?: Column): 
   const mdPath = path.join(folder, `${id}.md`);
   if (fs.existsSync(mdPath)) fs.unlinkSync(mdPath);
   // Also clean up flat folder if using a column-specific folder
-  if (column?.cards_folder) {
+  if (column?.folder) {
     const flatMdPath = path.join(boardRoot, 'cards', `${id}.md`);
     if (fs.existsSync(flatMdPath)) fs.unlinkSync(flatMdPath);
   }
