@@ -3,7 +3,7 @@
   "displayName": "Personal Kanban",
   "description": "File-based personal kanban board for VSCode",
   "version": "0.0.11",
-  "publisher": "tugbay",
+  "publisher": "TGBY",
   "engines": {
     "vscode": "^1.85.0"
   },
