@@ -31,7 +31,7 @@
       "label": "Review",
       "wip_limit": null,
       "folder": "cards/review",
-      "cards": ["20260328-c7f2"]
+      "cards": []
     },
     {
       "id": "done",
@@ -39,6 +39,7 @@
       "wip_limit": null,
       "folder": "cards/done",
       "cards": [
+        "20260328-c7f2",
         "20260328-04db",
         "20260328-f5c1",
         "20260327-5538",

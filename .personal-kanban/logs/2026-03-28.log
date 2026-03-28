@@ -3,3 +3,4 @@
 [2026-03-28T14:36:29.616Z] [hook.failed] git.merged → ./scripts/card-to-done.js (spawn error)
 [2026-03-28T14:36:29.616Z] [hook.failed] git.merged → ./scripts/card-to-done.js (exit -13)
 [2026-03-28T14:51:01.900Z] [hook.fired] git.merged → ./scripts/card-to-done.js
+[2026-03-28T15:52:43.218Z] [hook.fired] git.merged → ./scripts/card-to-done.js
