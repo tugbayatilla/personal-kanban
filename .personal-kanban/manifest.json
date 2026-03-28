@@ -7,7 +7,12 @@
       "label": "Backlog",
       "wip_limit": null,
       "folder": "cards/backlog",
-      "cards": []
+      "cards": [
+        "20260328-d9a6",
+        "20260328-5bf4",
+        "20260328-7235",
+        "20260328-f970"
+      ]
     },
     {
       "id": "refined",
@@ -15,9 +20,7 @@
       "wip_limit": null,
       "folder": "cards/refined",
       "cards": [
-        "20260328-d9a6",
-        "20260328-5bf4",
-        "20260328-7235"
+        "20260328-69da"
       ]
     },
     {
