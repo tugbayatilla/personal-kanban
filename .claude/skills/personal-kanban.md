@@ -38,7 +38,7 @@ Card file structure:
 }
 ```
 
-`metadata.branch` is optional — it is set when a card enters In Progress and cleared after merge on Done.
+`metadata.branch` is optional — it is set when a card enters In Progress. It is **never cleared** — it persists on the card even after merging to Done, as a permanent record of which branch was used.
 
 ### Parsing card content
 Card `content` is free-form markdown:
@@ -177,7 +177,7 @@ When the user signals that a card is done (via `/personal-kanban done` or by dra
    git push origin --delete {branch-name}
    ```
 4. Update the card file:
-   - Remove (or null out) `metadata.branch`.
+   - **Do not remove `metadata.branch`** — it is kept as a permanent record.
    - Update `metadata.updated_at`.
    - Write the updated card file.
 5. Update the manifest:
@@ -186,6 +186,20 @@ When the user signals that a card is done (via `/personal-kanban done` or by dra
    - Write updated manifest.
 
 > If multiple cards are in Review, the user must specify which one to mark Done. Read all Review card files to show titles and their branch names before acting.
+
+---
+
+## Card Logs
+
+Every card has its own append-only log file at `.personal-kanban/logs/cards/{id}.log`. The extension writes a timestamped entry automatically for:
+
+- `created in column: {column}` — when the card is first created
+- `updated` — when card content is saved
+- `moved from {from} to {to}` — on every column move
+- `branch merged into main: {branch}` — after a successful git merge
+- `deleted from column: {column}` — when the card is deleted
+
+These files are written by the extension. Claude does not need to write them manually.
 
 ---
 

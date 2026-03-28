@@ -10,6 +10,7 @@ import {
   deleteCardFile,
   generateId,
   loadBoardState,
+  appendCardLog,
 } from './io';
 import { Card, WebviewMessage } from './types';
 import { fireHook, extractTitle } from './hooks';
@@ -94,6 +95,7 @@ export class BoardPanel {
           metadata: { created_at: now, updated_at: now },
         };
         writeCard(this._boardRoot, card);
+        appendCardLog(this._boardRoot, id, `created in column: ${msg.columnId}`);
         this._suppressNextWatch = true;
         const m1 = readManifest(this._boardRoot);
         const addCol = m1.columns.find((c) => c.id === msg.columnId);
@@ -113,6 +115,7 @@ export class BoardPanel {
         if (existing) {
           existing.content = msg.content;
           writeCard(this._boardRoot, existing);
+          appendCardLog(this._boardRoot, msg.id, 'updated');
         }
         this._sendState();
         break;
@@ -133,6 +136,7 @@ export class BoardPanel {
           }
         }
         writeManifest(this._boardRoot, m2);
+        appendCardLog(this._boardRoot, msg.id, `deleted from column: ${deletedFromColumn}`);
         deleteCardFile(this._boardRoot, msg.id);
         fireHook(this._boardRoot, m2, 'card.deleted', {
           card_id: msg.id,
@@ -168,7 +172,7 @@ export class BoardPanel {
               execSync('git push origin main', opts);
               execSync(`git branch -D ${branch}`, opts);
               try { execSync(`git push origin --delete ${branch}`, opts); } catch { /* remote branch may not exist */ }
-              delete card.metadata.branch;
+              appendCardLog(this._boardRoot, msg.id, `branch merged into main: ${branch}`);
               writeCard(this._boardRoot, card);
               const mergeManifest = readManifest(this._boardRoot);
               fireHook(this._boardRoot, mergeManifest, 'git.merged', {
@@ -201,6 +205,7 @@ export class BoardPanel {
           dstCol.cards.splice(toIdx, 0, msg.id);
         }
         writeManifest(this._boardRoot, m3);
+        appendCardLog(this._boardRoot, msg.id, `moved from ${msg.fromColumn} to ${msg.toColumn}`);
         fireHook(this._boardRoot, m3, 'card.moved', {
           card_id: msg.id,
           card_title: movedTitle,

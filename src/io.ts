@@ -45,6 +45,16 @@ export function writeCard(boardRoot: string, card: Card): void {
   fs.renameSync(tmp, target);
 }
 
+export function appendCardLog(boardRoot: string, cardId: string, line: string): void {
+  const logPath = path.join(boardRoot, 'logs', 'cards', `${cardId}.log`);
+  const dir = path.dirname(logPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  const entry = `[${new Date().toISOString()}] ${line}\n`;
+  fs.appendFileSync(logPath, entry, 'utf-8');
+}
+
 export function deleteCardFile(boardRoot: string, id: string): void {
   const cardPath = getCardPath(boardRoot, id);
   if (fs.existsSync(cardPath)) {
