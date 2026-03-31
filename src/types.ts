@@ -22,6 +22,7 @@ export interface CardMetadata {
   created_at: string;
   updated_at: string;
   branch?: string;
+  archived_at?: string;
 }
 
 export interface Card {
@@ -36,7 +37,8 @@ export type WebviewMessage =
   | { type: 'addCard'; columnId: string }
   | { type: 'saveCard'; id: string; content: string }
   | { type: 'deleteCard'; id: string }
-  | { type: 'moveCard'; id: string; fromColumn: string; toColumn: string; toIndex: number };
+  | { type: 'moveCard'; id: string; fromColumn: string; toColumn: string; toIndex: number }
+  | { type: 'archiveDone' };
 
 // Messages from extension → webview
 export type ExtensionMessage =

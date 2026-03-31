@@ -268,6 +268,26 @@ body {
   opacity: 0.7;
 }
 
+.archive-done-btn {
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 5px;
+  border: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.4));
+  background: transparent;
+  border-radius: 6px;
+  color: var(--vscode-descriptionForeground, rgba(128,128,128,0.8));
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.archive-done-btn:hover {
+  background: var(--vscode-list-hoverBackground);
+  color: var(--vscode-foreground);
+  border-color: var(--vscode-focusBorder);
+}
+
 .add-card-btn {
   width: 100%;
   margin-top: 8px;

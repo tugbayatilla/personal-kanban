@@ -207,10 +207,6 @@ export class BoardPanel {
             const toIdx = Math.max(0, Math.min(msg.toIndex, dstCol.cards.length));
             dstCol.cards.splice(toIdx, 0, msg.id);
           }
-          // Archive card file when moved to done
-          if (msg.toColumn === 'done') {
-            archiveCardFile(this._boardRoot, msg.id);
-          }
           writeManifest(this._boardRoot, manifest);
           return { m3: manifest, movedCard: card };
         });
@@ -241,6 +237,31 @@ export class BoardPanel {
             });
           }
         }
+        this._sendState();
+        break;
+      }
+
+      case 'archiveDone': {
+        this._suppressNextWatch = true;
+        const m4 = withLock(this._boardRoot, () => {
+          const manifest = readManifest(this._boardRoot);
+          const doneCol = manifest.columns.find((c) => c.id === 'done');
+          if (doneCol && doneCol.cards.length > 0) {
+            const archivedAt = new Date().toISOString();
+            for (const id of doneCol.cards) {
+              const card = readCard(this._boardRoot, id);
+              if (card) {
+                card.metadata.archived_at = archivedAt;
+                writeCard(this._boardRoot, card);
+              }
+              archiveCardFile(this._boardRoot, id);
+            }
+            doneCol.cards = [];
+            writeManifest(this._boardRoot, manifest);
+          }
+          return manifest;
+        });
+        fireHook(this._boardRoot, m4, 'cards.archived', { column: 'done' });
         this._sendState();
         break;
       }

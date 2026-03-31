@@ -132,6 +132,7 @@ function parseCardMd(raw: string, id: string): Card {
       created_at: fm.created_at ?? now,
       updated_at: fm.updated_at ?? now,
       ...(fm.branch ? { branch: fm.branch } : {}),
+      ...(fm.archived_at ? { archived_at: fm.archived_at } : {}),
     },
   };
 }
@@ -145,6 +146,9 @@ function serializeCardMd(card: Card): string {
   ];
   if (card.metadata.branch) {
     lines.push(`branch: ${card.metadata.branch}`);
+  }
+  if (card.metadata.archived_at) {
+    lines.push(`archived_at: ${card.metadata.archived_at}`);
   }
   lines.push('---', '');
   lines.push(card.content);

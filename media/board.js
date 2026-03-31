@@ -90,6 +90,18 @@
     header.appendChild(countSpan);
     colEl.appendChild(header);
 
+    // Archive all button for done column
+    if (col.id === 'done' && cardIds.length > 0) {
+      const archiveBtn = document.createElement('button');
+      archiveBtn.className = 'archive-done-btn';
+      archiveBtn.textContent = '\u{1F5C3} Archive all';
+      archiveBtn.title = 'Move all done cards to archive';
+      archiveBtn.addEventListener('click', function () {
+        vscode.postMessage({ type: 'archiveDone' });
+      });
+      colEl.appendChild(archiveBtn);
+    }
+
     // Cards container
     const cardsEl = document.createElement('div');
     cardsEl.className = 'cards';
@@ -200,11 +212,12 @@
       function metaRow(label, value) {
         return '<div><span class="meta-label">' + escHtml(label) + '</span>' + escHtml(value || '—') + '</div>';
       }
-      const knownKeys = ['created_at', 'updated_at', 'branch'];
+      const knownKeys = ['created_at', 'updated_at', 'branch', 'archived_at'];
       let rows = metaRow('id:', id) +
         metaRow('created:', meta.created_at ? new Date(meta.created_at).toLocaleString() : '') +
         metaRow('updated:', meta.updated_at ? new Date(meta.updated_at).toLocaleString() : '') +
-        metaRow('branch:', meta.branch || '');
+        metaRow('branch:', meta.branch || '') +
+        (meta.archived_at ? metaRow('archived:', new Date(meta.archived_at).toLocaleString()) : '');
       Object.keys(meta).forEach(function (key) {
         if (!knownKeys.includes(key)) {
           rows += metaRow(key + ':', String(meta[key]));
