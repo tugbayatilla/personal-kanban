@@ -68,15 +68,15 @@ export function withLock<T>(boardRoot: string, fn: () => T): T {
   const lockPath = getLockPath(boardRoot);
   const deadline = Date.now() + LOCK_TIMEOUT_MS;
 
-  while (true) {
+  for (;;) {
     try {
       // O_EXCL: fails atomically if lock file already exists
       const fd = fs.openSync(lockPath, 'wx');
       fs.writeSync(fd, process.pid.toString());
       fs.closeSync(fd);
       break; // lock acquired
-    } catch (e: any) {
-      if (e.code !== 'EEXIST') { throw e; }
+    } catch (e: unknown) {
+      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') { throw e; }
       if (Date.now() >= deadline) {
         // Check for stale lock (dead process)
         try {

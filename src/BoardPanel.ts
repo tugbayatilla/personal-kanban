@@ -114,7 +114,6 @@ export class BoardPanel {
       }
 
       case 'saveCard': {
-        const saveManifest = readManifest(this._boardRoot);
         const existing = readCard(this._boardRoot, msg.id);
         if (existing) {
           existing.content = msg.content;
@@ -155,7 +154,6 @@ export class BoardPanel {
       case 'moveCard': {
         // When moving to done, run git merge workflow if card has a branch
         if (msg.toColumn === 'done') {
-          const preManifest = readManifest(this._boardRoot);
           const card = readCard(this._boardRoot, msg.id);
           if (card?.metadata.branch) {
             const branch = card.metadata.branch;
