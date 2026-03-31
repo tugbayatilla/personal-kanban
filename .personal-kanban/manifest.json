@@ -1,90 +1,36 @@
 {
-  "version": 2,
-  "name": "personal-kanban",
-  "columns": [
-    {
-      "id": "backlog",
-      "label": "Backlog",
-      "wip_limit": null,
-      "folder": "cards/backlog",
-      "cards": [
-        "20260328-d9a6",
-        "20260328-5bf4",
-        "20260328-7235",
-        "20260328-f970"
-      ]
-    },
-    {
-      "id": "refined",
-      "label": "Refined",
-      "wip_limit": null,
-      "folder": "cards/refined",
-      "cards": [
-        "20260328-69da"
-      ]
-    },
-    {
-      "id": "in-progress",
-      "label": "In Progress",
-      "wip_limit": 1,
-      "folder": "cards/in-progress",
-      "cards": []
-    },
-    {
-      "id": "review",
-      "label": "Review",
-      "wip_limit": null,
-      "folder": "cards/review",
-      "cards": []
-    },
-    {
-      "id": "done",
-      "label": "Done",
-      "wip_limit": null,
-      "folder": "cards/done",
-      "cards": [
-        "20260328-c7f2",
-        "20260328-04db",
-        "20260328-f5c1",
-        "20260327-5538",
-        "20260327-055a",
-        "20260327-642d",
-        "20260327-642d",
-        "20260327-f0e4",
-        "20260327-ea39",
-        "20260327-f989",
-        "20260327-28fe",
-        "20260327-41a6",
-        "20260327-c4f2",
-        "20260327-f24b",
-        "20260327-e2b7",
-        "20260328-1f2a",
-        "20260327-b75c",
-        "20260328-1f5d"
-      ]
-    }
-  ],
-  "tags": {},
-  "scripts": {
-    "card-to-done": {
-      "file": "./scripts/card-to-done.js"
-    },
-    "wip-alert": {
-      "file": "./scripts/wip-alert.js"
-    },
-    "card-reviewed": {
-      "file": "./scripts/card-reviewed.js"
-    }
-  },
-  "hooks": {
-    "git.merged": [
-      "card-to-done"
+  "version": 3,
+  "columns": {
+    "backlog": [
+      "20260328-d9a6",
+      "20260328-5bf4",
+      "20260328-7235",
+      "20260328-f970"
     ],
-    "wip.violated": [
-      "wip-alert"
+    "refined": [
+      "20260328-69da"
     ],
-    "card.reviewed": [
-      "card-reviewed"
+    "in-progress": [],
+    "review": [],
+    "done": [
+      "20260328-c7f2",
+      "20260328-04db",
+      "20260328-f5c1",
+      "20260327-5538",
+      "20260327-055a",
+      "20260327-642d",
+      "20260327-642d",
+      "20260327-f0e4",
+      "20260327-ea39",
+      "20260327-f989",
+      "20260327-28fe",
+      "20260327-41a6",
+      "20260327-c4f2",
+      "20260327-f24b",
+      "20260327-e2b7",
+      "20260328-1f2a",
+      "20260327-b75c",
+      "20260328-1f5d"
     ]
   }
 }
