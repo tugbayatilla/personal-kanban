@@ -21,9 +21,11 @@ Before starting any work, find or create a card and ensure it is In Progress.
 ## Implementation Workflow
 - Move card to in-progress: remove id from current column, append to in-progress, update card's updated_at.
 - Create branch `{tag-prefix}/short-name` from a fresh pull of main; save branch name to card metadata.
+- Append a `## Plan` section to the card content describing the implementation approach.
 - Run tests to confirm green baseline before changing anything.
 - Make small focused commits with Conventional Commits messages throughout.
 - Write tests for new behaviour; all must pass before proceeding.
+- Append a `## Summary` section to the card content describing what was done.
 - Commit remaining work, push branch, move card to review, append `#claude-code` to card tag line. Stop.
 
 ## Done (triggered by user)
