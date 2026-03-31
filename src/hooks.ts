@@ -27,6 +27,16 @@ export function extractTitle(content: string): string {
   return '';
 }
 
+function formatPayloadContext(payload: Record<string, unknown>): string {
+  const parts: string[] = [];
+  if (payload.card_id) parts.push(`card=${payload.card_id}`);
+  if (payload.from_column) parts.push(`from=${payload.from_column}`);
+  if (payload.to_column) parts.push(`to=${payload.to_column}`);
+  if (payload.branch) parts.push(`branch=${payload.branch}`);
+  if (payload.column_id) parts.push(`column=${payload.column_id}`);
+  return parts.length > 0 ? ` ${parts.join(' ')}` : '';
+}
+
 export function fireHook(
   boardRoot: string,
   manifest: Manifest,
@@ -44,10 +54,12 @@ export function fireHook(
     ...payload,
   });
 
+  const context = formatPayloadContext(payload);
+
   for (const scriptName of scriptNames) {
     const scriptDef = manifest.scripts?.[scriptName];
     if (!scriptDef) {
-      appendLog(boardRoot, `[hook.failed] ${event} → ${scriptName} (not defined in manifest.scripts)`);
+      appendLog(boardRoot, `[hook.failed] ${event}${context} → ${scriptName} (not defined in manifest.scripts)`);
       continue;
     }
     const scriptPath = scriptDef.file;
@@ -62,7 +74,7 @@ export function fireHook(
         stdio: ['pipe', 'ignore', 'ignore'],
       });
     } catch {
-      appendLog(boardRoot, `[hook.failed] ${event} → ${scriptPath} (spawn error)`);
+      appendLog(boardRoot, `[hook.failed] ${event}${context} → ${scriptPath} (spawn error)`);
       continue;
     }
 
@@ -71,14 +83,14 @@ export function fireHook(
 
     child.on('close', (code: number | null) => {
       if (code === 0) {
-        appendLog(boardRoot, `[hook.fired] ${event} → ${scriptPath}`);
+        appendLog(boardRoot, `[hook.fired] ${event}${context} → ${scriptPath}`);
       } else {
-        appendLog(boardRoot, `[hook.failed] ${event} → ${scriptPath} (exit ${code ?? 'null'})`);
+        appendLog(boardRoot, `[hook.failed] ${event}${context} → ${scriptPath} (exit ${code ?? 'null'})`);
       }
     });
 
     child.on('error', () => {
-      appendLog(boardRoot, `[hook.failed] ${event} → ${scriptPath} (spawn error)`);
+      appendLog(boardRoot, `[hook.failed] ${event}${context} → ${scriptPath} (spawn error)`);
     });
   }
 }
