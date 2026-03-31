@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { BoardPanel } from './BoardPanel';
-import { getBoardRoot, boardExists, writeManifest } from './io';
+import { getBoardRoot, boardExists, writeManifest, withLock } from './io';
 import { initLogger } from './hooks';
 import { Manifest } from './types';
 
@@ -57,7 +57,7 @@ function initBoard(): void {
     hooks: {},
   };
 
-  writeManifest(boardRoot, manifest);
+  withLock(boardRoot, () => writeManifest(boardRoot, manifest));
   vscode.window.showInformationMessage('Kanban: Board initialized.');
 }
 

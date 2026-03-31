@@ -52,17 +52,58 @@ export function readManifest(boardRoot: string): Manifest {
   return data as Manifest;
 }
 
+const LOCK_RETRY_MS = 20;
+const LOCK_TIMEOUT_MS = 3000;
+
+function getLockPath(boardRoot: string): string {
+  return path.join(boardRoot, 'manifest.lock');
+}
+
+export function withLock<T>(boardRoot: string, fn: () => T): T {
+  const lockPath = getLockPath(boardRoot);
+  const deadline = Date.now() + LOCK_TIMEOUT_MS;
+
+  while (true) {
+    try {
+      // O_EXCL: fails atomically if lock file already exists
+      const fd = fs.openSync(lockPath, 'wx');
+      fs.writeSync(fd, process.pid.toString());
+      fs.closeSync(fd);
+      break; // lock acquired
+    } catch (e: any) {
+      if (e.code !== 'EEXIST') { throw e; }
+      if (Date.now() >= deadline) {
+        // Check for stale lock (dead process)
+        try {
+          const pid = parseInt(fs.readFileSync(lockPath, 'utf-8'), 10);
+          if (!isNaN(pid)) {
+            try { process.kill(pid, 0); } catch {
+              // Process is dead — remove stale lock and retry
+              try { fs.unlinkSync(lockPath); } catch { /* ignore */ }
+              continue;
+            }
+          }
+        } catch { /* ignore */ }
+        throw new Error(`manifest.lock: could not acquire within ${LOCK_TIMEOUT_MS}ms`);
+      }
+      // Spin-wait before retrying
+      const until = Date.now() + LOCK_RETRY_MS;
+      while (Date.now() < until) { /* spin */ }
+    }
+  }
+
+  try {
+    return fn();
+  } finally {
+    try { fs.unlinkSync(lockPath); } catch { /* ignore */ }
+  }
+}
+
 export function writeManifest(boardRoot: string, manifest: Manifest): void {
   const target = getManifestPath(boardRoot);
-  const lockPath = path.join(boardRoot, 'manifest.lock');
   const tmp = target + '.tmp';
-  fs.writeFileSync(lockPath, process.pid.toString(), 'utf-8');
-  try {
-    fs.writeFileSync(tmp, JSON.stringify(manifest, null, 2), 'utf-8');
-    fs.renameSync(tmp, target);
-  } finally {
-    if (fs.existsSync(lockPath)) fs.unlinkSync(lockPath);
-  }
+  fs.writeFileSync(tmp, JSON.stringify(manifest, null, 2), 'utf-8');
+  fs.renameSync(tmp, target);
 }
 
 function parseCardMd(raw: string, id: string): Card {
