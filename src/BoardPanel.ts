@@ -11,6 +11,7 @@ import {
   deleteCardFile,
   generateId,
   loadBoardState,
+  withLock,
 } from './io';
 import { Card, WebviewMessage } from './types';
 import { fireHook, extractTitle } from './hooks';
@@ -95,11 +96,14 @@ export class BoardPanel {
           metadata: { created_at: now, updated_at: now },
         };
         this._suppressNextWatch = true;
-        const m1 = readManifest(this._boardRoot);
-        const addCol = m1.columns.find((c) => c.id === msg.columnId);
-        writeCard(this._boardRoot, card);
-        if (addCol) addCol.cards.push(id);
-        writeManifest(this._boardRoot, m1);
+        const m1 = withLock(this._boardRoot, () => {
+          const manifest = readManifest(this._boardRoot);
+          const addCol = manifest.columns.find((c) => c.id === msg.columnId);
+          writeCard(this._boardRoot, card);
+          if (addCol) { addCol.cards.push(id); }
+          writeManifest(this._boardRoot, manifest);
+          return manifest;
+        });
         fireHook(this._boardRoot, m1, 'card.created', {
           card_id: id,
           card_title: '',
@@ -122,20 +126,23 @@ export class BoardPanel {
 
       case 'deleteCard': {
         this._suppressNextWatch = true;
-        const m2 = readManifest(this._boardRoot);
-        const deletedCard = readCard(this._boardRoot, msg.id);
-        const deletedTitle = deletedCard ? extractTitle(deletedCard.content) : '';
-        let deletedFromColumn = '';
-        for (const col of m2.columns) {
-          const idx = col.cards.indexOf(msg.id);
-          if (idx !== -1) {
-            deletedFromColumn = col.id;
-            col.cards.splice(idx, 1);
-            break;
+        const { m2, deletedTitle, deletedFromColumn } = withLock(this._boardRoot, () => {
+          const manifest = readManifest(this._boardRoot);
+          const deletedCard = readCard(this._boardRoot, msg.id);
+          const title = deletedCard ? extractTitle(deletedCard.content) : '';
+          let fromColumn = '';
+          for (const col of manifest.columns) {
+            const idx = col.cards.indexOf(msg.id);
+            if (idx !== -1) {
+              fromColumn = col.id;
+              col.cards.splice(idx, 1);
+              break;
+            }
           }
-        }
-        writeManifest(this._boardRoot, m2);
-        deleteCardFile(this._boardRoot, msg.id);
+          writeManifest(this._boardRoot, manifest);
+          deleteCardFile(this._boardRoot, msg.id);
+          return { m2: manifest, deletedTitle: title, deletedFromColumn: fromColumn };
+        });
         fireHook(this._boardRoot, m2, 'card.deleted', {
           card_id: msg.id,
           card_title: deletedTitle,
@@ -171,7 +178,7 @@ export class BoardPanel {
               execSync('git push origin main', opts);
               execSync(`git branch -D ${branch}`, opts);
               try { execSync(`git push origin --delete ${branch}`, opts); } catch { /* remote branch may not exist */ }
-              writeCard(this._boardRoot, card);
+              withLock(this._boardRoot, () => writeCard(this._boardRoot, card));
               const mergeManifest = readManifest(this._boardRoot);
               fireHook(this._boardRoot, mergeManifest, 'git.merged', {
                 card_id: msg.id,
@@ -187,26 +194,29 @@ export class BoardPanel {
         }
 
         this._suppressNextWatch = true;
-        const m3 = readManifest(this._boardRoot);
-        const movedCard = readCard(this._boardRoot, msg.id);
+        const { m3, movedCard } = withLock(this._boardRoot, () => {
+          const manifest = readManifest(this._boardRoot);
+          const card = readCard(this._boardRoot, msg.id);
+          // Remove from source column
+          const srcCol = manifest.columns.find((c) => c.id === msg.fromColumn);
+          if (srcCol) {
+            const srcIdx = srcCol.cards.indexOf(msg.id);
+            if (srcIdx !== -1) { srcCol.cards.splice(srcIdx, 1); }
+          }
+          // Insert at target position
+          const dstCol = manifest.columns.find((c) => c.id === msg.toColumn);
+          if (dstCol) {
+            const toIdx = Math.max(0, Math.min(msg.toIndex, dstCol.cards.length));
+            dstCol.cards.splice(toIdx, 0, msg.id);
+          }
+          // Archive card file when moved to done
+          if (msg.toColumn === 'done') {
+            archiveCardFile(this._boardRoot, msg.id);
+          }
+          writeManifest(this._boardRoot, manifest);
+          return { m3: manifest, movedCard: card };
+        });
         const movedTitle = movedCard ? extractTitle(movedCard.content) : '';
-        // Remove from source column
-        const srcCol = m3.columns.find((c) => c.id === msg.fromColumn);
-        if (srcCol) {
-          const srcIdx = srcCol.cards.indexOf(msg.id);
-          if (srcIdx !== -1) srcCol.cards.splice(srcIdx, 1);
-        }
-        // Insert at target position
-        const dstCol = m3.columns.find((c) => c.id === msg.toColumn);
-        if (dstCol) {
-          const toIdx = Math.max(0, Math.min(msg.toIndex, dstCol.cards.length));
-          dstCol.cards.splice(toIdx, 0, msg.id);
-        }
-        // Archive card file when moved to done
-        if (msg.toColumn === 'done') {
-          archiveCardFile(this._boardRoot, msg.id);
-        }
-        writeManifest(this._boardRoot, m3);
         fireHook(this._boardRoot, m3, 'card.moved', {
           card_id: msg.id,
           card_title: movedTitle,
