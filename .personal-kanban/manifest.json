@@ -6,18 +6,18 @@
       "label": "Backlog",
       "wip_limit": null,
       "cards": [
-        "20260328-d9a6",
         "20260328-5bf4",
         "20260328-7235",
-        "20260328-f970",
-        "20260331-21ee"
+        "20260328-f970"
       ]
     },
     {
       "id": "refined",
       "label": "Refined",
       "wip_limit": 2,
-      "cards": []
+      "cards": [
+        "20260331-e814"
+      ]
     },
     {
       "id": "in-progress",
@@ -30,7 +30,8 @@
       "label": "Review",
       "wip_limit": null,
       "cards": [
-        "20260331-b9d7"
+        "20260331-b9d7",
+        "20260328-d9a6"
       ]
     },
     {
