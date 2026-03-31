@@ -29,18 +29,13 @@
       "id": "review",
       "label": "Review",
       "wip_limit": null,
-      "cards": [
-        "20260331-b9d7",
-        "20260328-d9a6"
-      ]
+      "cards": []
     },
     {
       "id": "done",
       "label": "Done",
       "wip_limit": null,
-      "cards": [
-        "20260331-e353"
-      ]
+      "cards": []
     }
   ],
   "name": ""
