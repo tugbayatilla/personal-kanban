@@ -6,15 +6,22 @@ import {
   readManifest,
   readCard,
   writeCard,
-  moveCardFile,
   writeManifest,
   deleteCardFile,
   generateId,
   loadBoardState,
   appendCardLog,
 } from './io';
-import { Card, WebviewMessage } from './types';
+import { Card, ColumnConfig, WebviewMessage } from './types';
 import { fireHook, extractTitle } from './hooks';
+
+const DEFAULT_COLUMNS: ColumnConfig[] = [
+  { id: 'backlog',      label: 'Backlog',      wipLimit: null },
+  { id: 'refined',     label: 'Refined',      wipLimit: null },
+  { id: 'in-progress', label: 'In Progress',  wipLimit: 1    },
+  { id: 'review',      label: 'Review',       wipLimit: null },
+  { id: 'done',        label: 'Done',         wipLimit: null },
+];
 
 export class BoardPanel {
   public static currentPanel: BoardPanel | undefined;
@@ -62,13 +69,26 @@ export class BoardPanel {
     );
 
     this._panel.webview.html = this._getHtml();
-
     this._startWatcher();
+  }
+
+  /** Read board config from VSCode settings, falling back to defaults. */
+  private _getBoardConfig(): {
+    columns: ColumnConfig[];
+    tags: Record<string, { color: string }>;
+    hooks: Record<string, { file: string }>;
+  } {
+    const cfg = vscode.workspace.getConfiguration('personalKanban');
+    const columns = cfg.get<ColumnConfig[]>('columns') ?? DEFAULT_COLUMNS;
+    const tags = cfg.get<Record<string, { color: string }>>('tags') ?? {};
+    const hooks = cfg.get<Record<string, { file: string }>>('hooks') ?? {};
+    return { columns, tags, hooks };
   }
 
   private _sendState(): void {
     try {
-      const { manifest, cards } = loadBoardState(this._boardRoot);
+      const { columns, tags, hooks } = this._getBoardConfig();
+      const { manifest, cards } = loadBoardState(this._boardRoot, columns, tags, hooks);
       this._panel.webview.postMessage({ type: 'setState', manifest, cards });
     } catch (err) {
       this._panel.webview.postMessage({
@@ -81,6 +101,8 @@ export class BoardPanel {
   }
 
   private async _handleMessage(msg: WebviewMessage): Promise<void> {
+    const { hooks } = this._getBoardConfig();
+
     switch (msg.type) {
       case 'ready': {
         this._sendState();
@@ -98,11 +120,11 @@ export class BoardPanel {
         this._suppressNextWatch = true;
         const m1 = readManifest(this._boardRoot);
         const addCol = m1.columns.find((c) => c.id === msg.columnId);
-        writeCard(this._boardRoot, card, addCol);
+        writeCard(this._boardRoot, card);
         appendCardLog(this._boardRoot, id, `created in column: ${msg.columnId}`);
         if (addCol) addCol.cards.push(id);
         writeManifest(this._boardRoot, m1);
-        fireHook(this._boardRoot, m1, 'card.created', {
+        fireHook(this._boardRoot, hooks, 'card.created', {
           card_id: id,
           card_title: '',
           column: msg.columnId,
@@ -113,13 +135,14 @@ export class BoardPanel {
 
       case 'saveCard': {
         const saveManifest = readManifest(this._boardRoot);
-        const existing = readCard(this._boardRoot, msg.id, saveManifest);
+        const existing = readCard(this._boardRoot, msg.id);
         if (existing) {
           existing.content = msg.content;
-          const saveCol = saveManifest.columns.find((c) => c.cards.includes(msg.id));
-          writeCard(this._boardRoot, existing, saveCol);
+          writeCard(this._boardRoot, existing);
           appendCardLog(this._boardRoot, msg.id, 'updated');
         }
+        // saveManifest is read but not written — no structural change needed
+        void saveManifest;
         this._sendState();
         break;
       }
@@ -127,23 +150,21 @@ export class BoardPanel {
       case 'deleteCard': {
         this._suppressNextWatch = true;
         const m2 = readManifest(this._boardRoot);
-        const deletedCard = readCard(this._boardRoot, msg.id, m2);
+        const deletedCard = readCard(this._boardRoot, msg.id);
         const deletedTitle = deletedCard ? extractTitle(deletedCard.content) : '';
         let deletedFromColumn = '';
-        let deletedCol = undefined;
         for (const col of m2.columns) {
           const idx = col.cards.indexOf(msg.id);
           if (idx !== -1) {
             deletedFromColumn = col.id;
-            deletedCol = col;
             col.cards.splice(idx, 1);
             break;
           }
         }
         writeManifest(this._boardRoot, m2);
         appendCardLog(this._boardRoot, msg.id, `deleted from column: ${deletedFromColumn}`);
-        deleteCardFile(this._boardRoot, msg.id, deletedCol);
-        fireHook(this._boardRoot, m2, 'card.deleted', {
+        deleteCardFile(this._boardRoot, msg.id);
+        fireHook(this._boardRoot, hooks, 'card.deleted', {
           card_id: msg.id,
           card_title: deletedTitle,
           last_column: deletedFromColumn,
@@ -156,7 +177,7 @@ export class BoardPanel {
         // When moving to done, run git merge workflow if card has a branch
         if (msg.toColumn === 'done') {
           const preManifest = readManifest(this._boardRoot);
-          const card = readCard(this._boardRoot, msg.id, preManifest);
+          const card = readCard(this._boardRoot, msg.id);
           if (card?.metadata.branch) {
             const branch = card.metadata.branch;
             const confirmed = await vscode.window.showWarningMessage(
@@ -177,12 +198,10 @@ export class BoardPanel {
               execSync(`git merge --no-ff ${branch} -m "Merge ${branch} into main"`, opts);
               execSync('git push origin main', opts);
               execSync(`git branch -D ${branch}`, opts);
-              try { execSync(`git push origin --delete ${branch}`, opts); } catch { /* remote branch may not exist */ }
+              try { execSync(`git push origin --delete ${branch}`, opts); } catch { /* remote may not exist */ }
               appendCardLog(this._boardRoot, msg.id, `branch merged into main: ${branch}`);
-              const mergeCol = preManifest.columns.find((c) => c.cards.includes(msg.id));
-              writeCard(this._boardRoot, card, mergeCol);
-              const mergeManifest = readManifest(this._boardRoot);
-              fireHook(this._boardRoot, mergeManifest, 'git.merged', {
+              writeCard(this._boardRoot, card);
+              fireHook(this._boardRoot, hooks, 'git.merged', {
                 card_id: msg.id,
                 card_title: extractTitle(card.content),
                 branch,
@@ -192,55 +211,69 @@ export class BoardPanel {
               this._sendState();
               return;
             }
+            // Suppress unused warning on preManifest
+            void preManifest;
           }
         }
 
         this._suppressNextWatch = true;
         const m3 = readManifest(this._boardRoot);
-        const movedCard = readCard(this._boardRoot, msg.id, m3);
+        const movedCard = readCard(this._boardRoot, msg.id);
         const movedTitle = movedCard ? extractTitle(movedCard.content) : '';
+
         // Remove from source column
         const srcCol = m3.columns.find((c) => c.id === msg.fromColumn);
         if (srcCol) {
           const srcIdx = srcCol.cards.indexOf(msg.id);
           if (srcIdx !== -1) srcCol.cards.splice(srcIdx, 1);
         }
+
         // Insert at target position
         const dstCol = m3.columns.find((c) => c.id === msg.toColumn);
         if (dstCol) {
           const toIdx = Math.max(0, Math.min(msg.toIndex, dstCol.cards.length));
           dstCol.cards.splice(toIdx, 0, msg.id);
         }
-        // Move file if column folders differ
-        moveCardFile(this._boardRoot, msg.id, srcCol, dstCol);
+
         writeManifest(this._boardRoot, m3);
         appendCardLog(this._boardRoot, msg.id, `moved from ${msg.fromColumn} to ${msg.toColumn}`);
-        fireHook(this._boardRoot, m3, 'card.moved', {
+
+        fireHook(this._boardRoot, hooks, 'card.moved', {
           card_id: msg.id,
           card_title: movedTitle,
           from_column: msg.fromColumn,
           to_column: msg.toColumn,
         });
+
         if (msg.toColumn === 'review') {
-          fireHook(this._boardRoot, m3, 'card.reviewed', {
+          fireHook(this._boardRoot, hooks, 'card.reviewed', {
             card_id: msg.id,
             card_title: movedTitle,
             from_column: msg.fromColumn,
             branch: movedCard?.metadata.branch,
           });
         }
-        const destColumn = m3.columns.find((c) => c.id === msg.toColumn);
-        if (destColumn?.wip_limit !== null && destColumn?.wip_limit !== undefined) {
-          const destCount = destColumn.cards?.length ?? 0;
-          if (destCount > destColumn.wip_limit) {
-            fireHook(this._boardRoot, m3, 'wip.violated', {
+
+        // Fire column-specific hook (e.g. card.in-progress, card.done)
+        fireHook(this._boardRoot, hooks, `card.${msg.toColumn}`, {
+          card_id: msg.id,
+          card_title: movedTitle,
+          from_column: msg.fromColumn,
+        });
+
+        // WIP limit check
+        if (dstCol?.wip_limit !== null && dstCol?.wip_limit !== undefined) {
+          const destCount = dstCol.cards.length;
+          if (destCount > dstCol.wip_limit) {
+            fireHook(this._boardRoot, hooks, 'wip.violated', {
               column: msg.toColumn,
-              wip_limit: destColumn.wip_limit,
+              wip_limit: dstCol.wip_limit,
               current_count: destCount,
               card_id: msg.id,
             });
           }
         }
+
         this._sendState();
         break;
       }

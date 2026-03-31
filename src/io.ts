@@ -1,6 +1,23 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { Card, Column, Manifest } from './types';
+import { Card, Column, ColumnConfig, Manifest } from './types';
+
+// V3 stored format (disk) — structure only, no config
+interface StoredManifest {
+  version: number;
+  columns: Record<string, string[]>; // columnId → ordered card IDs
+}
+
+// Default column config used when VSCode settings are absent
+const DEFAULT_COLUMNS: ColumnConfig[] = [
+  { id: 'backlog',     label: 'Backlog',      wipLimit: null },
+  { id: 'refined',    label: 'Refined',      wipLimit: null },
+  { id: 'in-progress',label: 'In Progress',  wipLimit: 1    },
+  { id: 'review',     label: 'Review',       wipLimit: null },
+  { id: 'done',       label: 'Done',         wipLimit: null },
+];
+
+// ── Paths ─────────────────────────────────────────────────────────────────────
 
 export function getBoardRoot(workspaceRoot: string): string {
   return path.join(workspaceRoot, '.personal-kanban');
@@ -10,38 +27,154 @@ export function getManifestPath(boardRoot: string): string {
   return path.join(boardRoot, 'manifest.json');
 }
 
-export function resolveCardsFolder(boardRoot: string, column?: Column): string {
-  if (column?.folder) {
-    return path.join(boardRoot, column.folder);
-  }
-  return path.join(boardRoot, 'cards');
-}
-
-export function getCardPath(boardRoot: string, id: string, column?: Column): string {
-  return path.join(resolveCardsFolder(boardRoot, column), `${id}.md`);
-}
-
 export function boardExists(boardRoot: string): boolean {
   return fs.existsSync(getManifestPath(boardRoot));
 }
 
-export function readManifest(boardRoot: string): Manifest {
+function getCardDir(boardRoot: string, id: string): string {
+  return path.join(boardRoot, 'cards', id);
+}
+
+function getCardFilePath(boardRoot: string, id: string): string {
+  return path.join(getCardDir(boardRoot, id), `${id}.md`);
+}
+
+function getCardLogPath(boardRoot: string, id: string): string {
+  return path.join(getCardDir(boardRoot, id), `${id}.log`);
+}
+
+// ── Stored manifest (V3) ──────────────────────────────────────────────────────
+
+function readStoredManifest(boardRoot: string): StoredManifest {
   const raw = fs.readFileSync(getManifestPath(boardRoot), 'utf-8');
-  return JSON.parse(raw) as Manifest;
+  const parsed = JSON.parse(raw);
+  if (parsed.version !== 3) {
+    return migrateToV3(boardRoot, parsed);
+  }
+  return parsed as StoredManifest;
+}
+
+function writeStoredManifest(boardRoot: string, stored: StoredManifest): void {
+  const target = getManifestPath(boardRoot);
+  const tmp = target + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(stored, null, 2), 'utf-8');
+  fs.renameSync(tmp, target);
+}
+
+/**
+ * Migrate any pre-v3 manifest to v3.
+ * Moves card files from cards/{column}/{id}.md → cards/{id}/{id}.md
+ * Moves logs from logs/cards/{id}.log → cards/{id}/{id}.log
+ */
+function migrateToV3(boardRoot: string, legacy: Record<string, unknown>): StoredManifest {
+  const legacyCols = (legacy.columns ?? []) as Array<{
+    id: string;
+    folder?: string;
+    cards?: string[];
+  }>;
+
+  // Collect all card IDs in column order for the stored manifest
+  const storedColumns: Record<string, string[]> = {};
+
+  for (const col of legacyCols) {
+    const colFolder = col.folder
+      ? path.join(boardRoot, col.folder)
+      : path.join(boardRoot, 'cards', col.id);
+    const cardIds = col.cards ?? [];
+    storedColumns[col.id] = cardIds;
+
+    for (const id of cardIds) {
+      const dstDir = getCardDir(boardRoot, id);
+
+      // Move card .md file
+      const srcMd = path.join(colFolder, `${id}.md`);
+      const dstMd = getCardFilePath(boardRoot, id);
+      if (fs.existsSync(srcMd) && !fs.existsSync(dstMd)) {
+        fs.mkdirSync(dstDir, { recursive: true });
+        fs.renameSync(srcMd, dstMd);
+      }
+
+      // Move card .log file from logs/cards/
+      const srcLog = path.join(boardRoot, 'logs', 'cards', `${id}.log`);
+      const dstLog = getCardLogPath(boardRoot, id);
+      if (fs.existsSync(srcLog) && !fs.existsSync(dstLog)) {
+        fs.mkdirSync(dstDir, { recursive: true });
+        fs.renameSync(srcLog, dstLog);
+      }
+    }
+  }
+
+  const v3: StoredManifest = { version: 3, columns: storedColumns };
+  writeStoredManifest(boardRoot, v3);
+
+  // Create board.log if absent
+  const boardLogPath = path.join(boardRoot, 'board.log');
+  if (!fs.existsSync(boardLogPath)) {
+    fs.writeFileSync(boardLogPath, '', 'utf-8');
+  }
+
+  return v3;
+}
+
+// ── Runtime manifest (combines stored + settings) ─────────────────────────────
+
+function buildManifest(
+  stored: StoredManifest,
+  columnConfigs: ColumnConfig[],
+  tags: Record<string, { color: string }>,
+  hooks: Record<string, { file: string }>
+): Manifest {
+  // Determine column order: configs first (in settings order), then any extras from stored
+  const configIds = new Set(columnConfigs.map((c) => c.id));
+  const extraIds = Object.keys(stored.columns).filter((id) => !configIds.has(id));
+
+  const columns: Column[] = [
+    ...columnConfigs.map((cfg) => ({
+      id: cfg.id,
+      label: cfg.label,
+      wip_limit: cfg.wipLimit,
+      cards: stored.columns[cfg.id] ?? [],
+    })),
+    ...extraIds.map((id) => ({
+      id,
+      label: id,
+      wip_limit: null,
+      cards: stored.columns[id],
+    })),
+  ];
+
+  return { version: stored.version, name: 'personal-kanban', columns, tags, hooks };
+}
+
+export function readManifest(
+  boardRoot: string,
+  columnConfigs?: ColumnConfig[],
+  tags?: Record<string, { color: string }>,
+  hooks?: Record<string, { file: string }>
+): Manifest {
+  const stored = readStoredManifest(boardRoot);
+  return buildManifest(
+    stored,
+    columnConfigs ?? DEFAULT_COLUMNS,
+    tags ?? {},
+    hooks ?? {}
+  );
 }
 
 export function writeManifest(boardRoot: string, manifest: Manifest): void {
-  const target = getManifestPath(boardRoot);
-  const tmp = target + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(manifest, null, 2), 'utf-8');
-  fs.renameSync(tmp, target);
+  const stored: StoredManifest = { version: 3, columns: {} };
+  for (const col of manifest.columns) {
+    stored.columns[col.id] = col.cards;
+  }
+  writeStoredManifest(boardRoot, stored);
 }
+
+// ── Card serialization ────────────────────────────────────────────────────────
 
 function parseCardMd(raw: string, id: string): Card {
   const now = new Date().toISOString();
   const match = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (!match) {
-    // No frontmatter — treat entire file as content
     return { id, content: raw, metadata: { created_at: now, updated_at: now } };
   }
   const fm: Record<string, string> = {};
@@ -51,7 +184,7 @@ function parseCardMd(raw: string, id: string): Card {
     fm[line.slice(0, colon).trim()] = line.slice(colon + 1).trim();
   }
   return {
-    id, // filename is source of truth
+    id,
     content: match[2].replace(/^\n/, ''),
     metadata: {
       created_at: fm.created_at ?? now,
@@ -76,76 +209,58 @@ function serializeCardMd(card: Card): string {
   return lines.join('\n');
 }
 
-export function readCard(boardRoot: string, id: string, manifest?: Manifest): Card | null {
-  // Try column-specific folder if manifest provided
-  if (manifest) {
-    const col = manifest.columns.find((c) => c.cards.includes(id));
-    if (col?.folder) {
-      const colPath = path.join(boardRoot, col.folder, `${id}.md`);
-      if (fs.existsSync(colPath)) {
-        return parseCardMd(fs.readFileSync(colPath, 'utf-8'), id);
-      }
-    }
+// ── Card I/O ──────────────────────────────────────────────────────────────────
+
+export function readCard(boardRoot: string, id: string, _manifest?: Manifest): Card | null {
+  // V3: cards/{id}/{id}.md
+  const v3Path = getCardFilePath(boardRoot, id);
+  if (fs.existsSync(v3Path)) {
+    return parseCardMd(fs.readFileSync(v3Path, 'utf-8'), id);
   }
-  // Default: flat cards/ folder (.md)
-  const mdPath = path.join(boardRoot, 'cards', `${id}.md`);
-  if (fs.existsSync(mdPath)) {
-    return parseCardMd(fs.readFileSync(mdPath, 'utf-8'), id);
-  }
-  // Fallback: legacy .json format
-  const jsonPath = path.join(boardRoot, 'cards', `${id}.json`);
-  if (!fs.existsSync(jsonPath)) return null;
-  const raw = fs.readFileSync(jsonPath, 'utf-8');
-  return JSON.parse(raw) as Card;
+  return null;
 }
 
-export function writeCard(boardRoot: string, card: Card, column?: Column): void {
+export function writeCard(boardRoot: string, card: Card, _column?: Column): void {
   card.metadata.updated_at = new Date().toISOString();
-  const folder = resolveCardsFolder(boardRoot, column);
-  fs.mkdirSync(folder, { recursive: true });
-  const target = path.join(folder, `${card.id}.md`);
+  const dir = getCardDir(boardRoot, card.id);
+  fs.mkdirSync(dir, { recursive: true });
+  const target = getCardFilePath(boardRoot, card.id);
   const tmp = target + '.tmp';
   fs.writeFileSync(tmp, serializeCardMd(card), 'utf-8');
   fs.renameSync(tmp, target);
-  // Remove legacy .json file if it exists
-  const jsonPath = path.join(boardRoot, 'cards', `${card.id}.json`);
-  if (fs.existsSync(jsonPath)) {
-    fs.unlinkSync(jsonPath);
+}
+
+// No-op: in V3 cards live in their own folder and don't move on column change
+export function moveCardFile(
+  _boardRoot: string,
+  _id: string,
+  _fromColumn?: Column,
+  _toColumn?: Column
+): void {}
+
+export function deleteCardFile(boardRoot: string, id: string, _column?: Column): void {
+  const dir = getCardDir(boardRoot, id);
+  if (fs.existsSync(dir)) {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 }
 
-export function moveCardFile(boardRoot: string, id: string, fromColumn?: Column, toColumn?: Column): void {
-  const srcFolder = resolveCardsFolder(boardRoot, fromColumn);
-  const dstFolder = resolveCardsFolder(boardRoot, toColumn);
-  if (srcFolder === dstFolder) return;
-  const srcPath = path.join(srcFolder, `${id}.md`);
-  if (!fs.existsSync(srcPath)) return;
-  fs.mkdirSync(dstFolder, { recursive: true });
-  fs.renameSync(srcPath, path.join(dstFolder, `${id}.md`));
-}
+// ── Logging ───────────────────────────────────────────────────────────────────
 
 export function appendCardLog(boardRoot: string, cardId: string, line: string): void {
-  const logPath = path.join(boardRoot, 'logs', 'cards', `${cardId}.log`);
-  const dir = path.dirname(logPath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
+  const dir = getCardDir(boardRoot, cardId);
+  fs.mkdirSync(dir, { recursive: true });
   const entry = `[${new Date().toISOString()}] ${line}\n`;
+  fs.appendFileSync(getCardLogPath(boardRoot, cardId), entry, 'utf-8');
+}
+
+export function appendBoardLog(boardRoot: string, line: string): void {
+  const logPath = path.join(boardRoot, 'board.log');
+  const entry = `${new Date().toISOString()}  ${line}\n`;
   fs.appendFileSync(logPath, entry, 'utf-8');
 }
 
-export function deleteCardFile(boardRoot: string, id: string, column?: Column): void {
-  const folder = resolveCardsFolder(boardRoot, column);
-  const mdPath = path.join(folder, `${id}.md`);
-  if (fs.existsSync(mdPath)) fs.unlinkSync(mdPath);
-  // Also clean up flat folder if using a column-specific folder
-  if (column?.folder) {
-    const flatMdPath = path.join(boardRoot, 'cards', `${id}.md`);
-    if (fs.existsSync(flatMdPath)) fs.unlinkSync(flatMdPath);
-  }
-  const jsonPath = path.join(boardRoot, 'cards', `${id}.json`);
-  if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath);
-}
+// ── ID generation ─────────────────────────────────────────────────────────────
 
 export function generateId(): string {
   const now = new Date();
@@ -154,16 +269,20 @@ export function generateId(): string {
   return `${date}-${hex}`;
 }
 
-export function loadBoardState(boardRoot: string): {
-  manifest: Manifest;
-  cards: Record<string, Card | null>;
-} {
-  const manifest = readManifest(boardRoot);
+// ── Board state ───────────────────────────────────────────────────────────────
+
+export function loadBoardState(
+  boardRoot: string,
+  columnConfigs?: ColumnConfig[],
+  tags?: Record<string, { color: string }>,
+  hooks?: Record<string, { file: string }>
+): { manifest: Manifest; cards: Record<string, Card | null> } {
+  const manifest = readManifest(boardRoot, columnConfigs, tags, hooks);
   const cards: Record<string, Card | null> = {};
   for (const col of manifest.columns) {
-    for (const id of col.cards ?? []) {
+    for (const id of col.cards) {
       if (!(id in cards)) {
-        cards[id] = readCard(boardRoot, id, manifest);
+        cards[id] = readCard(boardRoot, id);
       }
     }
   }

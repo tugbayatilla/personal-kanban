@@ -1,21 +1,19 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as vscode from 'vscode';
 import { spawn } from 'child_process';
-import { Manifest } from './types';
+import { appendBoardLog } from './io';
 
-function getLogPath(boardRoot: string): string {
-  const date = new Date().toISOString().slice(0, 10);
-  return path.join(boardRoot, 'logs', `${date}.log`);
+let _outputChannel: vscode.OutputChannel | null = null;
+
+export function setOutputChannel(channel: vscode.OutputChannel): void {
+  _outputChannel = channel;
 }
 
-function appendLog(boardRoot: string, line: string): void {
-  const logPath = getLogPath(boardRoot);
-  const dir = path.dirname(logPath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  const entry = `[${new Date().toISOString()}] ${line}\n`;
-  fs.appendFileSync(logPath, entry, 'utf-8');
+function logLine(boardRoot: string, line: string): void {
+  const entry = `${new Date().toISOString()}  ${line}`;
+  appendBoardLog(boardRoot, line);
+  _outputChannel?.appendLine(entry);
 }
 
 export function extractTitle(content: string): string {
@@ -27,14 +25,26 @@ export function extractTitle(content: string): string {
   return '';
 }
 
+/**
+ * Fire a hook for the given event.
+ * @param hooks  Map of event name → { file: scriptPath } from VSCode settings.
+ *               Script paths are resolved relative to the workspace root.
+ */
 export function fireHook(
   boardRoot: string,
-  manifest: Manifest,
+  hooks: Record<string, { file: string }>,
   event: string,
   payload: Record<string, unknown>
 ): void {
-  const scriptNames = manifest.hooks[event];
-  if (!scriptNames || scriptNames.length === 0) {
+  const hookDef = hooks[event];
+  if (!hookDef?.file) return;
+
+  const workspaceRoot = path.dirname(boardRoot);
+  const scriptPath = hookDef.file;
+  const absScript = path.resolve(workspaceRoot, scriptPath);
+
+  if (!fs.existsSync(absScript)) {
+    logLine(boardRoot, `[hook.failed] ${event} → ${scriptPath} (file not found)`);
     return;
   }
 
@@ -44,41 +54,33 @@ export function fireHook(
     ...payload,
   });
 
-  for (const scriptName of scriptNames) {
-    const scriptDef = manifest.scripts?.[scriptName];
-    if (!scriptDef) {
-      appendLog(boardRoot, `[hook.failed] ${event} → ${scriptName} (not defined in manifest.scripts)`);
-      continue;
-    }
-    const scriptPath = scriptDef.file;
-    const absScript = path.resolve(boardRoot, scriptPath);
-    const isNode = absScript.endsWith('.js');
-    const cmd = isNode ? process.execPath : absScript;
-    const args = isNode ? [absScript] : [];
-    let child;
-    try {
-      child = spawn(cmd, args, {
-        cwd: boardRoot,
-        stdio: ['pipe', 'ignore', 'ignore'],
-      });
-    } catch {
-      appendLog(boardRoot, `[hook.failed] ${event} → ${scriptPath} (spawn error)`);
-      continue;
-    }
+  const isNode = absScript.endsWith('.js');
+  const cmd = isNode ? process.execPath : absScript;
+  const args = isNode ? [absScript] : [];
 
-    child.stdin.write(fullPayload);
-    child.stdin.end();
-
-    child.on('close', (code: number | null) => {
-      if (code === 0) {
-        appendLog(boardRoot, `[hook.fired] ${event} → ${scriptPath}`);
-      } else {
-        appendLog(boardRoot, `[hook.failed] ${event} → ${scriptPath} (exit ${code ?? 'null'})`);
-      }
+  let child;
+  try {
+    child = spawn(cmd, args, {
+      cwd: workspaceRoot,
+      stdio: ['pipe', 'ignore', 'ignore'],
     });
-
-    child.on('error', () => {
-      appendLog(boardRoot, `[hook.failed] ${event} → ${scriptPath} (spawn error)`);
-    });
+  } catch {
+    logLine(boardRoot, `[hook.failed] ${event} → ${scriptPath} (spawn error)`);
+    return;
   }
+
+  child.stdin.write(fullPayload);
+  child.stdin.end();
+
+  child.on('close', (code: number | null) => {
+    if (code === 0) {
+      logLine(boardRoot, `[hook.fired] ${event} → ${scriptPath}`);
+    } else {
+      logLine(boardRoot, `[hook.failed] ${event} → ${scriptPath} (exit ${code ?? 'null'})`);
+    }
+  });
+
+  child.on('error', () => {
+    logLine(boardRoot, `[hook.failed] ${event} → ${scriptPath} (spawn error)`);
+  });
 }

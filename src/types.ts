@@ -1,22 +1,25 @@
+// Column config — lives in VSCode settings (personalKanban.columns)
+export interface ColumnConfig {
+  id: string;
+  label: string;
+  wipLimit: number | null;
+}
+
+// Runtime column — config from settings + card IDs from manifest, sent to webview
 export interface Column {
   id: string;
   label: string;
   wip_limit: number | null;
   cards: string[];
-  folder?: string;
 }
 
-export interface Script {
-  file: string;
-}
-
+// Runtime manifest sent to webview (built from stored manifest + VSCode settings)
 export interface Manifest {
   version: number;
   name: string;
   columns: Column[];
-  tags: Record<string, { color: string; weight: number }>;
-  scripts: Record<string, Script>;
-  hooks: Record<string, string[]>;
+  tags: Record<string, { color: string }>;
+  hooks: Record<string, { file: string }>;
 }
 
 export interface CardMetadata {

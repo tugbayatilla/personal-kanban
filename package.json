@@ -22,7 +22,65 @@
         "command": "personal-kanban.openBoard",
         "title": "Personal Kanban: Open Board"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Personal Kanban",
+      "properties": {
+        "personalKanban.boardPath": {
+          "type": "string",
+          "default": ".personal-kanban",
+          "description": "Path to the board folder, relative to workspace root."
+        },
+        "personalKanban.columns": {
+          "type": "array",
+          "description": "Ordered list of columns. Defines visual order and WIP limits.",
+          "items": {
+            "type": "object",
+            "required": ["id", "label"],
+            "properties": {
+              "id":       { "type": "string", "description": "Unique column slug" },
+              "label":    { "type": "string", "description": "Display name" },
+              "wipLimit": { "type": ["number", "null"], "description": "Max cards; null = no limit" }
+            }
+          },
+          "default": [
+            { "id": "backlog",      "label": "Backlog",      "wipLimit": null },
+            { "id": "refined",     "label": "Refined",      "wipLimit": null },
+            { "id": "in-progress", "label": "In Progress",  "wipLimit": 1    },
+            { "id": "review",      "label": "Review",       "wipLimit": null },
+            { "id": "done",        "label": "Done",         "wipLimit": null }
+          ]
+        },
+        "personalKanban.tags": {
+          "type": "object",
+          "description": "Tag display config. Keys are tag names (without #).",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "color": { "type": "string", "description": "Hex color for tag badge" }
+            }
+          },
+          "default": {
+            "bug":         { "color": "#e74c3c" },
+            "feature":     { "color": "#2ecc71" },
+            "improvement": { "color": "#3498db" },
+            "chore":       { "color": "#95a5a6" },
+            "claude-code": { "color": "#9b59b6" }
+          }
+        },
+        "personalKanban.hooks": {
+          "type": "object",
+          "description": "Event hooks. Keys are event names; values specify the script file relative to workspace root. Events: card.created, card.updated, card.deleted, card.<column-slug>, wip.violated, git.merged.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "file": { "type": "string", "description": "Script path relative to workspace root (.js or shell)" }
+            }
+          },
+          "default": {}
+        }
+      }
+    }
   },
   "scripts": {
     "build": "node esbuild.js",
