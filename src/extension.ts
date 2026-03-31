@@ -54,7 +54,7 @@ function initBoard(): void {
     ],
     tags: {},
     scripts: {},
-    hooks: {},
+    hooks: {},  // in-memory only; written from VSCode settings, not to file
   };
 
   withLock(boardRoot, () => writeManifest(boardRoot, manifest));

@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as vscode from 'vscode';
 import { Card, Manifest } from './types';
 
 export function getBoardRoot(workspaceRoot: string): string {
@@ -49,6 +50,10 @@ export function readManifest(boardRoot: string): Manifest {
     if (!data.scripts) data.scripts = {};
     if (!data.hooks) data.hooks = {};
   }
+  const config = vscode.workspace.getConfiguration('personal-kanban');
+  data.tags = config.get<Manifest['tags']>('tags', {});
+  data.scripts = config.get<Manifest['scripts']>('scripts', {});
+  data.hooks = config.get<Manifest['hooks']>('hooks', {});
   return data as Manifest;
 }
 
@@ -102,7 +107,9 @@ export function withLock<T>(boardRoot: string, fn: () => T): T {
 export function writeManifest(boardRoot: string, manifest: Manifest): void {
   const target = getManifestPath(boardRoot);
   const tmp = target + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(manifest, null, 2), 'utf-8');
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { tags, scripts, hooks, ...toWrite } = manifest;
+  fs.writeFileSync(tmp, JSON.stringify(toWrite, null, 2), 'utf-8');
   fs.renameSync(tmp, target);
 }
 
