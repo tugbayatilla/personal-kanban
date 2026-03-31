@@ -1,21 +1,16 @@
-import * as fs from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
+import * as vscode from 'vscode';
 import { Manifest } from './types';
 
-function getLogPath(boardRoot: string): string {
-  const date = new Date().toISOString().slice(0, 10);
-  return path.join(boardRoot, 'logs', `${date}.log`);
+let _channel: vscode.OutputChannel | undefined;
+
+export function initLogger(channel: vscode.OutputChannel): void {
+  _channel = channel;
 }
 
-function appendLog(boardRoot: string, line: string): void {
-  const logPath = getLogPath(boardRoot);
-  const dir = path.dirname(logPath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  const entry = `[${new Date().toISOString()}] ${line}\n`;
-  fs.appendFileSync(logPath, entry, 'utf-8');
+function log(line: string): void {
+  _channel?.appendLine(`[${new Date().toISOString()}] ${line}`);
 }
 
 export function extractTitle(content: string): string {
@@ -25,6 +20,16 @@ export function extractTitle(content: string): string {
     }
   }
   return '';
+}
+
+function formatPayloadContext(payload: Record<string, unknown>): string {
+  const parts: string[] = [];
+  if (payload.card_id) parts.push(`card=${payload.card_id}`);
+  if (payload.from_column) parts.push(`from=${payload.from_column}`);
+  if (payload.to_column) parts.push(`to=${payload.to_column}`);
+  if (payload.branch) parts.push(`branch=${payload.branch}`);
+  if (payload.column_id) parts.push(`column=${payload.column_id}`);
+  return parts.length > 0 ? ` ${parts.join(' ')}` : '';
 }
 
 export function fireHook(
@@ -44,17 +49,18 @@ export function fireHook(
     ...payload,
   });
 
+  const context = formatPayloadContext(payload);
+
   for (const scriptName of scriptNames) {
     const scriptDef = manifest.scripts?.[scriptName];
     if (!scriptDef) {
-      appendLog(boardRoot, `[hook.failed] ${event} → ${scriptName} (not defined in manifest.scripts)`);
+      log(`[hook.failed] ${event}${context} → ${scriptName} (not defined in manifest.scripts)`);
       continue;
     }
     const scriptPath = scriptDef.file;
     const absScript = path.resolve(boardRoot, scriptPath);
-    const isNode = absScript.endsWith('.js');
-    const cmd = isNode ? process.execPath : absScript;
-    const args = isNode ? [absScript] : [];
+    const cmd = process.execPath;
+    const args = [absScript];
     let child;
     try {
       child = spawn(cmd, args, {
@@ -62,7 +68,7 @@ export function fireHook(
         stdio: ['pipe', 'ignore', 'ignore'],
       });
     } catch {
-      appendLog(boardRoot, `[hook.failed] ${event} → ${scriptPath} (spawn error)`);
+      log(`[hook.failed] ${event}${context} → ${scriptPath} (spawn error)`);
       continue;
     }
 
@@ -71,14 +77,14 @@ export function fireHook(
 
     child.on('close', (code: number | null) => {
       if (code === 0) {
-        appendLog(boardRoot, `[hook.fired] ${event} → ${scriptPath}`);
+        log(`[hook.fired] ${event}${context} → ${scriptPath}`);
       } else {
-        appendLog(boardRoot, `[hook.failed] ${event} → ${scriptPath} (exit ${code ?? 'null'})`);
+        log(`[hook.failed] ${event}${context} → ${scriptPath} (exit ${code ?? 'null'})`);
       }
     });
 
     child.on('error', () => {
-      appendLog(boardRoot, `[hook.failed] ${event} → ${scriptPath} (spawn error)`);
+      log(`[hook.failed] ${event}${context} → ${scriptPath} (spawn error)`);
     });
   }
 }

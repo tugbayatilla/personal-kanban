@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { Card, Column, Manifest } from './types';
+import { Card, Manifest } from './types';
 
 export function getBoardRoot(workspaceRoot: string): string {
   return path.join(workspaceRoot, '.personal-kanban');
@@ -10,15 +10,12 @@ export function getManifestPath(boardRoot: string): string {
   return path.join(boardRoot, 'manifest.json');
 }
 
-export function resolveCardsFolder(boardRoot: string, column?: Column): string {
-  if (column?.folder) {
-    return path.join(boardRoot, column.folder);
-  }
-  return path.join(boardRoot, 'cards');
+export function getCardPath(boardRoot: string, id: string): string {
+  return path.join(boardRoot, 'cards', `${id}.md`);
 }
 
-export function getCardPath(boardRoot: string, id: string, column?: Column): string {
-  return path.join(resolveCardsFolder(boardRoot, column), `${id}.md`);
+export function getArchivePath(boardRoot: string, id: string): string {
+  return path.join(boardRoot, 'archive', `${id}.md`);
 }
 
 export function boardExists(boardRoot: string): boolean {
@@ -32,16 +29,21 @@ export function readManifest(boardRoot: string): Manifest {
 
 export function writeManifest(boardRoot: string, manifest: Manifest): void {
   const target = getManifestPath(boardRoot);
+  const lockPath = path.join(boardRoot, 'manifest.lock');
   const tmp = target + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(manifest, null, 2), 'utf-8');
-  fs.renameSync(tmp, target);
+  fs.writeFileSync(lockPath, process.pid.toString(), 'utf-8');
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(manifest, null, 2), 'utf-8');
+    fs.renameSync(tmp, target);
+  } finally {
+    if (fs.existsSync(lockPath)) fs.unlinkSync(lockPath);
+  }
 }
 
 function parseCardMd(raw: string, id: string): Card {
   const now = new Date().toISOString();
   const match = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (!match) {
-    // No frontmatter — treat entire file as content
     return { id, content: raw, metadata: { created_at: now, updated_at: now } };
   }
   const fm: Record<string, string> = {};
@@ -51,7 +53,7 @@ function parseCardMd(raw: string, id: string): Card {
     fm[line.slice(0, colon).trim()] = line.slice(colon + 1).trim();
   }
   return {
-    id, // filename is source of truth
+    id,
     content: match[2].replace(/^\n/, ''),
     metadata: {
       created_at: fm.created_at ?? now,
@@ -76,32 +78,33 @@ function serializeCardMd(card: Card): string {
   return lines.join('\n');
 }
 
-export function readCard(boardRoot: string, id: string, manifest?: Manifest): Card | null {
-  // Try column-specific folder if manifest provided
-  if (manifest) {
-    const col = manifest.columns.find((c) => c.cards.includes(id));
-    if (col?.folder) {
-      const colPath = path.join(boardRoot, col.folder, `${id}.md`);
-      if (fs.existsSync(colPath)) {
-        return parseCardMd(fs.readFileSync(colPath, 'utf-8'), id);
-      }
-    }
-  }
-  // Default: flat cards/ folder (.md)
-  const mdPath = path.join(boardRoot, 'cards', `${id}.md`);
+export function readCard(boardRoot: string, id: string): Card | null {
+  // Active cards
+  const mdPath = getCardPath(boardRoot, id);
   if (fs.existsSync(mdPath)) {
     return parseCardMd(fs.readFileSync(mdPath, 'utf-8'), id);
   }
-  // Fallback: legacy .json format
+  // Archived cards
+  const archivePath = getArchivePath(boardRoot, id);
+  if (fs.existsSync(archivePath)) {
+    return parseCardMd(fs.readFileSync(archivePath, 'utf-8'), id);
+  }
+  // Legacy: card stored in cards/{id}/{id}.md subdirectory
+  const legacyDirPath = path.join(boardRoot, 'cards', id, `${id}.md`);
+  if (fs.existsSync(legacyDirPath)) {
+    return parseCardMd(fs.readFileSync(legacyDirPath, 'utf-8'), id);
+  }
+  // Legacy: .json format
   const jsonPath = path.join(boardRoot, 'cards', `${id}.json`);
-  if (!fs.existsSync(jsonPath)) return null;
-  const raw = fs.readFileSync(jsonPath, 'utf-8');
-  return JSON.parse(raw) as Card;
+  if (fs.existsSync(jsonPath)) {
+    return JSON.parse(fs.readFileSync(jsonPath, 'utf-8')) as Card;
+  }
+  return null;
 }
 
-export function writeCard(boardRoot: string, card: Card, column?: Column): void {
+export function writeCard(boardRoot: string, card: Card): void {
   card.metadata.updated_at = new Date().toISOString();
-  const folder = resolveCardsFolder(boardRoot, column);
+  const folder = path.join(boardRoot, 'cards');
   fs.mkdirSync(folder, { recursive: true });
   const target = path.join(folder, `${card.id}.md`);
   const tmp = target + '.tmp';
@@ -109,40 +112,23 @@ export function writeCard(boardRoot: string, card: Card, column?: Column): void 
   fs.renameSync(tmp, target);
   // Remove legacy .json file if it exists
   const jsonPath = path.join(boardRoot, 'cards', `${card.id}.json`);
-  if (fs.existsSync(jsonPath)) {
-    fs.unlinkSync(jsonPath);
+  if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath);
+}
+
+export function archiveCardFile(boardRoot: string, id: string): void {
+  const src = getCardPath(boardRoot, id);
+  const dst = getArchivePath(boardRoot, id);
+  fs.mkdirSync(path.dirname(dst), { recursive: true });
+  if (fs.existsSync(src)) {
+    fs.renameSync(src, dst);
   }
 }
 
-export function moveCardFile(boardRoot: string, id: string, fromColumn?: Column, toColumn?: Column): void {
-  const srcFolder = resolveCardsFolder(boardRoot, fromColumn);
-  const dstFolder = resolveCardsFolder(boardRoot, toColumn);
-  if (srcFolder === dstFolder) return;
-  const srcPath = path.join(srcFolder, `${id}.md`);
-  if (!fs.existsSync(srcPath)) return;
-  fs.mkdirSync(dstFolder, { recursive: true });
-  fs.renameSync(srcPath, path.join(dstFolder, `${id}.md`));
-}
-
-export function appendCardLog(boardRoot: string, cardId: string, line: string): void {
-  const logPath = path.join(boardRoot, 'logs', 'cards', `${cardId}.log`);
-  const dir = path.dirname(logPath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  const entry = `[${new Date().toISOString()}] ${line}\n`;
-  fs.appendFileSync(logPath, entry, 'utf-8');
-}
-
-export function deleteCardFile(boardRoot: string, id: string, column?: Column): void {
-  const folder = resolveCardsFolder(boardRoot, column);
-  const mdPath = path.join(folder, `${id}.md`);
+export function deleteCardFile(boardRoot: string, id: string): void {
+  const mdPath = getCardPath(boardRoot, id);
   if (fs.existsSync(mdPath)) fs.unlinkSync(mdPath);
-  // Also clean up flat folder if using a column-specific folder
-  if (column?.folder) {
-    const flatMdPath = path.join(boardRoot, 'cards', `${id}.md`);
-    if (fs.existsSync(flatMdPath)) fs.unlinkSync(flatMdPath);
-  }
+  const archivePath = getArchivePath(boardRoot, id);
+  if (fs.existsSync(archivePath)) fs.unlinkSync(archivePath);
   const jsonPath = path.join(boardRoot, 'cards', `${id}.json`);
   if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath);
 }
@@ -163,7 +149,7 @@ export function loadBoardState(boardRoot: string): {
   for (const col of manifest.columns) {
     for (const id of col.cards ?? []) {
       if (!(id in cards)) {
-        cards[id] = readCard(boardRoot, id, manifest);
+        cards[id] = readCard(boardRoot, id);
       }
     }
   }
