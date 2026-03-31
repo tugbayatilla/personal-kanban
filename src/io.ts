@@ -24,7 +24,32 @@ export function boardExists(boardRoot: string): boolean {
 
 export function readManifest(boardRoot: string): Manifest {
   const raw = fs.readFileSync(getManifestPath(boardRoot), 'utf-8');
-  return JSON.parse(raw) as Manifest;
+  const data = JSON.parse(raw);
+  // Migrate v3 object-format columns to v4 Column[] array
+  if (!Array.isArray(data.columns)) {
+    const colOrder = ['backlog', 'refined', 'in-progress', 'review', 'done'];
+    const colLabels: Record<string, string> = {
+      backlog: 'Backlog', refined: 'Refined', 'in-progress': 'In Progress',
+      review: 'Review', done: 'Done',
+    };
+    const colIds = Object.keys(data.columns as Record<string, string[]>);
+    const ordered = [
+      ...colOrder.filter(id => colIds.includes(id)),
+      ...colIds.filter(id => !colOrder.includes(id)),
+    ];
+    data.columns = ordered.map((id: string) => ({
+      id,
+      label: colLabels[id] ?? id,
+      wip_limit: null,
+      cards: (data.columns as Record<string, string[]>)[id] ?? [],
+    }));
+    data.version = 4;
+    if (!data.name) data.name = '';
+    if (!data.tags) data.tags = {};
+    if (!data.scripts) data.scripts = {};
+    if (!data.hooks) data.hooks = {};
+  }
+  return data as Manifest;
 }
 
 export function writeManifest(boardRoot: string, manifest: Manifest): void {
