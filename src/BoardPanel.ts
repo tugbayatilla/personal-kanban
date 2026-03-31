@@ -6,12 +6,11 @@ import {
   readManifest,
   readCard,
   writeCard,
-  moveCardFile,
+  archiveCardFile,
   writeManifest,
   deleteCardFile,
   generateId,
   loadBoardState,
-  appendCardLog,
 } from './io';
 import { Card, WebviewMessage } from './types';
 import { fireHook, extractTitle } from './hooks';
@@ -98,8 +97,7 @@ export class BoardPanel {
         this._suppressNextWatch = true;
         const m1 = readManifest(this._boardRoot);
         const addCol = m1.columns.find((c) => c.id === msg.columnId);
-        writeCard(this._boardRoot, card, addCol);
-        appendCardLog(this._boardRoot, id, `created in column: ${msg.columnId}`);
+        writeCard(this._boardRoot, card);
         if (addCol) addCol.cards.push(id);
         writeManifest(this._boardRoot, m1);
         fireHook(this._boardRoot, m1, 'card.created', {
@@ -113,12 +111,10 @@ export class BoardPanel {
 
       case 'saveCard': {
         const saveManifest = readManifest(this._boardRoot);
-        const existing = readCard(this._boardRoot, msg.id, saveManifest);
+        const existing = readCard(this._boardRoot, msg.id);
         if (existing) {
           existing.content = msg.content;
-          const saveCol = saveManifest.columns.find((c) => c.cards.includes(msg.id));
-          writeCard(this._boardRoot, existing, saveCol);
-          appendCardLog(this._boardRoot, msg.id, 'updated');
+          writeCard(this._boardRoot, existing);
         }
         this._sendState();
         break;
@@ -127,22 +123,19 @@ export class BoardPanel {
       case 'deleteCard': {
         this._suppressNextWatch = true;
         const m2 = readManifest(this._boardRoot);
-        const deletedCard = readCard(this._boardRoot, msg.id, m2);
+        const deletedCard = readCard(this._boardRoot, msg.id);
         const deletedTitle = deletedCard ? extractTitle(deletedCard.content) : '';
         let deletedFromColumn = '';
-        let deletedCol = undefined;
         for (const col of m2.columns) {
           const idx = col.cards.indexOf(msg.id);
           if (idx !== -1) {
             deletedFromColumn = col.id;
-            deletedCol = col;
             col.cards.splice(idx, 1);
             break;
           }
         }
         writeManifest(this._boardRoot, m2);
-        appendCardLog(this._boardRoot, msg.id, `deleted from column: ${deletedFromColumn}`);
-        deleteCardFile(this._boardRoot, msg.id, deletedCol);
+        deleteCardFile(this._boardRoot, msg.id);
         fireHook(this._boardRoot, m2, 'card.deleted', {
           card_id: msg.id,
           card_title: deletedTitle,
@@ -156,7 +149,7 @@ export class BoardPanel {
         // When moving to done, run git merge workflow if card has a branch
         if (msg.toColumn === 'done') {
           const preManifest = readManifest(this._boardRoot);
-          const card = readCard(this._boardRoot, msg.id, preManifest);
+          const card = readCard(this._boardRoot, msg.id);
           if (card?.metadata.branch) {
             const branch = card.metadata.branch;
             const confirmed = await vscode.window.showWarningMessage(
@@ -178,9 +171,7 @@ export class BoardPanel {
               execSync('git push origin main', opts);
               execSync(`git branch -D ${branch}`, opts);
               try { execSync(`git push origin --delete ${branch}`, opts); } catch { /* remote branch may not exist */ }
-              appendCardLog(this._boardRoot, msg.id, `branch merged into main: ${branch}`);
-              const mergeCol = preManifest.columns.find((c) => c.cards.includes(msg.id));
-              writeCard(this._boardRoot, card, mergeCol);
+              writeCard(this._boardRoot, card);
               const mergeManifest = readManifest(this._boardRoot);
               fireHook(this._boardRoot, mergeManifest, 'git.merged', {
                 card_id: msg.id,
@@ -197,7 +188,7 @@ export class BoardPanel {
 
         this._suppressNextWatch = true;
         const m3 = readManifest(this._boardRoot);
-        const movedCard = readCard(this._boardRoot, msg.id, m3);
+        const movedCard = readCard(this._boardRoot, msg.id);
         const movedTitle = movedCard ? extractTitle(movedCard.content) : '';
         // Remove from source column
         const srcCol = m3.columns.find((c) => c.id === msg.fromColumn);
@@ -211,10 +202,11 @@ export class BoardPanel {
           const toIdx = Math.max(0, Math.min(msg.toIndex, dstCol.cards.length));
           dstCol.cards.splice(toIdx, 0, msg.id);
         }
-        // Move file if column folders differ
-        moveCardFile(this._boardRoot, msg.id, srcCol, dstCol);
+        // Archive card file when moved to done
+        if (msg.toColumn === 'done') {
+          archiveCardFile(this._boardRoot, msg.id);
+        }
         writeManifest(this._boardRoot, m3);
-        appendCardLog(this._boardRoot, msg.id, `moved from ${msg.fromColumn} to ${msg.toColumn}`);
         fireHook(this._boardRoot, m3, 'card.moved', {
           card_id: msg.id,
           card_title: movedTitle,

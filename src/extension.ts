@@ -3,9 +3,14 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { BoardPanel } from './BoardPanel';
 import { getBoardRoot, boardExists, writeManifest } from './io';
+import { initLogger } from './hooks';
 import { Manifest } from './types';
 
 export function activate(context: vscode.ExtensionContext): void {
+  const channel = vscode.window.createOutputChannel('Personal Kanban');
+  context.subscriptions.push(channel);
+  initLogger(channel);
+
   context.subscriptions.push(
     vscode.commands.registerCommand('personal-kanban.initBoard', () => initBoard()),
     vscode.commands.registerCommand('personal-kanban.openBoard', () => {
@@ -35,12 +40,14 @@ function initBoard(): void {
   }
 
   fs.mkdirSync(path.join(boardRoot, 'cards'), { recursive: true });
+  fs.mkdirSync(path.join(boardRoot, 'archive'), { recursive: true });
 
   const manifest: Manifest = {
-    version: 2,
+    version: 4,
     name: path.basename(workspaceRoot),
     columns: [
       { id: 'backlog', label: 'Backlog', wip_limit: null, cards: [] },
+      { id: 'refined', label: 'Refined', wip_limit: null, cards: [] },
       { id: 'in-progress', label: 'In Progress', wip_limit: null, cards: [] },
       { id: 'review', label: 'Review', wip_limit: null, cards: [] },
       { id: 'done', label: 'Done', wip_limit: null, cards: [] },
