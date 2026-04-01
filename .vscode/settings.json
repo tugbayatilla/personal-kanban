@@ -68,5 +68,6 @@
             "color": "#f97316",
             "weight": 20
         }
-    }
+    },
+    "personal-kanban.tagColorTarget": "card-background"
 }

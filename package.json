@@ -50,7 +50,11 @@
         },
         "personal-kanban.tagColorTarget": {
           "type": "string",
-          "enum": ["tag", "card-border", "card-background"],
+          "enum": [
+            "tag",
+            "card-border",
+            "card-background"
+          ],
           "default": "tag",
           "description": "Where to apply tag colors on a card. `tag` colors the tag chip; `card-border` colors the card's left border; `card-background` tints the card background. The dominant tag (highest weight) is used for border and background modes."
         }

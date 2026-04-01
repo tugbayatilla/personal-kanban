@@ -35,12 +35,6 @@ npm run lint
 echo "==> Building extension..."
 npm run build
 
-echo "==> Packaging extension..."
-{ yes 2>/dev/null || true; } | vsce package --out dist/ --allow-missing-repository
-
-VSIX_FILE=$(ls -t dist/*.vsix | head -1)
-echo "==> Package created: $VSIX_FILE"
-
 if [[ "$PUBLISH" == true ]]; then
   if [[ -z "${AZURE_PAT:-}" ]]; then
     echo "Error: AZURE_PAT is not set. Add it to .env or export it before running." >&2
@@ -61,7 +55,29 @@ if [[ "$PUBLISH" == true ]]; then
   git commit -m "chore: release v$NEW_VERSION"
   echo "==> Committed as: chore: release v$NEW_VERSION"
 else
-  echo "==> Installing extension locally..."
-  code --install-extension "$VSIX_FILE" --force
+  echo "==> Patching package.json for local dev build..."
+  node -e "
+    const fs = require('fs');
+    const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+    pkg.name = pkg.name + '-dev';
+    pkg.displayName = pkg.displayName + ' (Dev)';
+    fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+  "
+
+  echo "==> Packaging dev extension..."
+  { yes 2>/dev/null || true; } | vsce package --out dist/ --allow-missing-repository
+  DEV_VSIX=$(ls -t dist/*.vsix | head -1)
+
+  echo "==> Restoring package.json..."
+  node -e "
+    const fs = require('fs');
+    const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+    pkg.name = pkg.name.replace(/-dev$/, '');
+    pkg.displayName = pkg.displayName.replace(/ \(Dev\)$/, '');
+    fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+  "
+
+  echo "==> Installing dev extension locally..."
+  code --install-extension "$DEV_VSIX" --force
   echo "==> Done. Reload VS Code to activate the updated extension."
 fi
