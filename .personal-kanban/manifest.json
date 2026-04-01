@@ -23,7 +23,9 @@
       "id": "in-progress",
       "label": "In Progress",
       "wip_limit": 1,
-      "cards": []
+      "cards": [
+        "20260401-f53f"
+      ]
     },
     {
       "id": "review",

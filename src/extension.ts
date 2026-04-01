@@ -58,6 +58,23 @@ function initBoard(): void {
   };
 
   withLock(boardRoot, () => writeManifest(boardRoot, manifest));
+
+  const config = vscode.workspace.getConfiguration('personal-kanban');
+  const scriptsInfo = config.inspect('scripts');
+  if (scriptsInfo?.workspaceValue === undefined && scriptsInfo?.workspaceFolderValue === undefined) {
+    void config.update('scripts', {
+      'card-reviewed': { file: 'scripts/card-reviewed.js' },
+      'wip-alert':     { file: 'scripts/wip-alert.js' },
+    }, vscode.ConfigurationTarget.Workspace);
+  }
+  const hooksInfo = config.inspect('hooks');
+  if (hooksInfo?.workspaceValue === undefined && hooksInfo?.workspaceFolderValue === undefined) {
+    void config.update('hooks', {
+      'card.reviewed': ['card-reviewed'],
+      'wip.violated':  ['wip-alert'],
+    }, vscode.ConfigurationTarget.Workspace);
+  }
+
   vscode.window.showInformationMessage('Kanban: Board initialized.');
 }
 
