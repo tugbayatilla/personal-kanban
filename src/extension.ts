@@ -64,6 +64,7 @@ function initBoard(): void {
   const writeIfMissing = (filePath: string, content: string) => {
     if (!fs.existsSync(filePath)) fs.writeFileSync(filePath, content);
   };
+  writeIfMissing(path.join(boardRoot, 'scripts', 'lib.js'), SCRIPT_LIB);
   writeIfMissing(path.join(boardRoot, 'scripts', 'card-reviewed.js'), SCRIPT_CARD_REVIEWED);
   writeIfMissing(path.join(boardRoot, 'scripts', 'wip-alert.js'), SCRIPT_WIP_ALERT);
   writeIfMissing(path.join(boardRoot, 'scripts', 'card-created.js'), SCRIPT_CARD_CREATED);
@@ -116,17 +117,25 @@ function initBoard(): void {
 
 export function deactivate(): void {}
 
-const SCRIPT_CARD_REVIEWED = `#!/usr/bin/env node
-// Fires a system notification when a card moves to Review.
-//
-// Hook event: card.reviewed
-// Payload: { event, timestamp, card_id, card_title, from_column, branch }
-//
-// Card files live at: cards/<card_id>.md  (YAML frontmatter + markdown body)
-
-'use strict';
+const SCRIPT_LIB = `'use strict';
 
 const { execSync } = require('child_process');
+
+function readPayload(scriptName, callback) {
+  let raw = '';
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', chunk => { raw += chunk; });
+  process.stdin.on('end', () => {
+    let payload;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      process.stderr.write(\`\${scriptName}: invalid JSON payload\\n\`);
+      process.exit(1);
+    }
+    callback(payload);
+  });
+}
 
 function notify(title, message) {
   try {
@@ -143,19 +152,22 @@ function notify(title, message) {
   }
 }
 
-let raw = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', chunk => { raw += chunk; });
-process.stdin.on('end', () => {
-  let payload;
-  try {
-    payload = JSON.parse(raw);
-  } catch {
-    process.stderr.write('card-reviewed: invalid JSON payload\\n');
-    process.exit(1);
-  }
+module.exports = { readPayload, notify };
+`;
 
-  const { card_title, branch } = payload;
+const SCRIPT_CARD_REVIEWED = `#!/usr/bin/env node
+// Fires a system notification when a card moves to Review.
+//
+// Hook event: card.reviewed
+// Payload: { event, timestamp, card_id, card_title, from_column, branch }
+//
+// Card files live at: cards/<card_id>.md  (YAML frontmatter + markdown body)
+
+'use strict';
+
+const { readPayload, notify } = require('./lib');
+
+readPayload('card-reviewed', ({ card_title, branch }) => {
   const message = branch
     ? \`"\${card_title}" is ready for review — branch: \${branch}\`
     : \`"\${card_title}" is ready for review\`;
@@ -173,36 +185,9 @@ const SCRIPT_WIP_ALERT = `#!/usr/bin/env node
 
 'use strict';
 
-const { execSync } = require('child_process');
+const { readPayload, notify } = require('./lib');
 
-function notify(title, message) {
-  try {
-    if (process.platform === 'darwin') {
-      execSync(\`osascript -e 'display notification \${JSON.stringify(message)} with title \${JSON.stringify(title)}'\`);
-    } else if (process.platform === 'win32') {
-      const ps = \`[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null; [System.Windows.Forms.MessageBox]::Show(\${JSON.stringify(message)}, \${JSON.stringify(title)})\`;
-      execSync(\`powershell -Command "\${ps}"\`, { stdio: 'ignore' });
-    } else {
-      execSync(\`notify-send \${JSON.stringify(title)} \${JSON.stringify(message)}\`);
-    }
-  } catch {
-    // Notification failure is non-fatal
-  }
-}
-
-let raw = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', chunk => { raw += chunk; });
-process.stdin.on('end', () => {
-  let payload;
-  try {
-    payload = JSON.parse(raw);
-  } catch {
-    process.stderr.write('wip-alert: invalid JSON payload\\n');
-    process.exit(1);
-  }
-
-  const { column, wip_limit, current_count } = payload;
+readPayload('wip-alert', ({ column, wip_limit, current_count }) => {
   const message = \`WIP limit exceeded in "\${column}": \${current_count} cards (limit: \${wip_limit})\`;
 
   notify('Kanban WIP Alert', message);
@@ -220,19 +205,9 @@ const SCRIPT_CARD_CREATED = `#!/usr/bin/env node
 
 'use strict';
 
-let raw = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', chunk => { raw += chunk; });
-process.stdin.on('end', () => {
-  let payload;
-  try {
-    payload = JSON.parse(raw);
-  } catch {
-    process.stderr.write('card-created: invalid JSON payload\\n');
-    process.exit(1);
-  }
+const { readPayload } = require('./lib');
 
-  const { card_id, card_title, column } = payload;
+readPayload('card-created', ({ card_id, card_title, column }) => {
   process.stdout.write(\`card created: "\${card_title}" (\${card_id}) in \${column}\\n\`);
 });
 `;
@@ -247,19 +222,9 @@ const SCRIPT_CARD_EDITED = `#!/usr/bin/env node
 
 'use strict';
 
-let raw = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', chunk => { raw += chunk; });
-process.stdin.on('end', () => {
-  let payload;
-  try {
-    payload = JSON.parse(raw);
-  } catch {
-    process.stderr.write('card-edited: invalid JSON payload\\n');
-    process.exit(1);
-  }
+const { readPayload } = require('./lib');
 
-  const { card_id, card_title } = payload;
+readPayload('card-edited', ({ card_id, card_title }) => {
   process.stdout.write(\`card edited: "\${card_title}" (\${card_id})\\n\`);
 });
 `;
@@ -274,19 +239,9 @@ const SCRIPT_CARD_DELETED = `#!/usr/bin/env node
 
 'use strict';
 
-let raw = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', chunk => { raw += chunk; });
-process.stdin.on('end', () => {
-  let payload;
-  try {
-    payload = JSON.parse(raw);
-  } catch {
-    process.stderr.write('card-deleted: invalid JSON payload\\n');
-    process.exit(1);
-  }
+const { readPayload } = require('./lib');
 
-  const { card_id, card_title, last_column } = payload;
+readPayload('card-deleted', ({ card_id, card_title, last_column }) => {
   process.stdout.write(\`card deleted: "\${card_title}" (\${card_id}) from \${last_column}\\n\`);
 });
 `;
@@ -301,19 +256,9 @@ const SCRIPT_CARD_MOVED = `#!/usr/bin/env node
 
 'use strict';
 
-let raw = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', chunk => { raw += chunk; });
-process.stdin.on('end', () => {
-  let payload;
-  try {
-    payload = JSON.parse(raw);
-  } catch {
-    process.stderr.write('card-moved: invalid JSON payload\\n');
-    process.exit(1);
-  }
+const { readPayload } = require('./lib');
 
-  const { card_id, card_title, from_column, to_column } = payload;
+readPayload('card-moved', ({ card_id, card_title, from_column, to_column }) => {
   process.stdout.write(\`card moved: "\${card_title}" (\${card_id}) \${from_column} → \${to_column}\\n\`);
 });
 `;
@@ -328,19 +273,9 @@ const SCRIPT_GIT_MERGED = `#!/usr/bin/env node
 
 'use strict';
 
-let raw = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', chunk => { raw += chunk; });
-process.stdin.on('end', () => {
-  let payload;
-  try {
-    payload = JSON.parse(raw);
-  } catch {
-    process.stderr.write('git-merged: invalid JSON payload\\n');
-    process.exit(1);
-  }
+const { readPayload } = require('./lib');
 
-  const { card_id, card_title, branch } = payload;
+readPayload('git-merged', ({ card_id, card_title, branch }) => {
   process.stdout.write(\`branch merged: "\${card_title}" (\${card_id}) — branch: \${branch}\\n\`);
 });
 `;
@@ -355,19 +290,9 @@ const SCRIPT_CARDS_ARCHIVED = `#!/usr/bin/env node
 
 'use strict';
 
-let raw = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', chunk => { raw += chunk; });
-process.stdin.on('end', () => {
-  let payload;
-  try {
-    payload = JSON.parse(raw);
-  } catch {
-    process.stderr.write('cards-archived: invalid JSON payload\\n');
-    process.exit(1);
-  }
+const { readPayload } = require('./lib');
 
-  const { column } = payload;
+readPayload('cards-archived', ({ column }) => {
   process.stdout.write(\`cards archived from: \${column}\\n\`);
 });
 `;
