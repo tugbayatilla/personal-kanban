@@ -47,6 +47,12 @@
           "type": "object",
           "default": {},
           "description": "Event hooks. Each key is an event name (e.g. `card.moved`); value is an array of script names to run."
+        },
+        "personal-kanban.tagColorTarget": {
+          "type": "string",
+          "enum": ["tag", "card-border", "card-background"],
+          "default": "tag",
+          "description": "Where to apply tag colors on a card. `tag` colors the tag chip; `card-border` colors the card's left border; `card-background` tints the card background. The dominant tag (highest weight) is used for border and background modes."
         }
       }
     }

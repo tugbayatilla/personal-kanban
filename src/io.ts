@@ -54,6 +54,7 @@ export function readManifest(boardRoot: string): Manifest {
   data.tags = config.get<Manifest['tags']>('tags', {});
   data.scripts = config.get<Manifest['scripts']>('scripts', {});
   data.hooks = config.get<Manifest['hooks']>('hooks', {});
+  data.tagColorTarget = config.get<Manifest['tagColorTarget']>('tagColorTarget', 'tag');
   return data as Manifest;
 }
 

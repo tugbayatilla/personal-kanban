@@ -108,6 +108,10 @@ function initBoard(): void {
       'urgent':  { color: '#f97316', weight: 20 },
     }, vscode.ConfigurationTarget.Workspace);
   }
+  const tagColorTargetInfo = config.inspect('tagColorTarget');
+  if (isUnset(tagColorTargetInfo?.workspaceValue) && isUnset(tagColorTargetInfo?.workspaceFolderValue)) {
+    void config.update('tagColorTarget', 'tag', vscode.ConfigurationTarget.Workspace);
+  }
 
   vscode.window.showInformationMessage('Kanban: Board initialized.');
 }

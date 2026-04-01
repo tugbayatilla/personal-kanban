@@ -16,6 +16,7 @@ export interface Manifest {
   tags: Record<string, { color: string; weight: number }>;
   scripts: Record<string, Script>;
   hooks: Record<string, string[]>;
+  tagColorTarget: 'tag' | 'card-border' | 'card-background';
 }
 
 export interface CardMetadata {

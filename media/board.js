@@ -182,6 +182,33 @@
       div.appendChild(bodyDiv);
     }
 
+    const colorTarget = (state.manifest.tagColorTarget) || 'tag';
+
+    // For card-border / card-background: find dominant tag (highest weight)
+    if (colorTarget !== 'tag' && tags.length > 0) {
+      var dominantColor = null;
+      var bestWeight = -Infinity;
+      tags.forEach(function (tag) {
+        const tagDef = state.manifest.tags && state.manifest.tags[tag];
+        if (tagDef && tagDef.color) {
+          const w = typeof tagDef.weight === 'number' ? tagDef.weight : 0;
+          if (w > bestWeight) {
+            bestWeight = w;
+            dominantColor = tagDef.color;
+          }
+        }
+      });
+      if (dominantColor) {
+        if (colorTarget === 'card-border') {
+          div.style.borderLeftWidth = '4px';
+          div.style.borderLeftColor = dominantColor;
+          div.style.paddingLeft = '8px';
+        } else if (colorTarget === 'card-background') {
+          div.style.backgroundColor = dominantColor + '22';
+        }
+      }
+    }
+
     if (tags.length > 0) {
       const tagsDiv = document.createElement('div');
       tagsDiv.className = 'card-tags';
@@ -189,10 +216,12 @@
         const chip = document.createElement('span');
         chip.className = 'tag-chip';
         chip.textContent = '#' + tag;
-        const tagDef = state.manifest.tags && state.manifest.tags[tag];
-        if (tagDef && tagDef.color) {
-          chip.style.backgroundColor = tagDef.color;
-          chip.style.color = '#fff';
+        if (colorTarget === 'tag') {
+          const tagDef = state.manifest.tags && state.manifest.tags[tag];
+          if (tagDef && tagDef.color) {
+            chip.style.backgroundColor = tagDef.color;
+            chip.style.color = '#fff';
+          }
         }
         tagsDiv.appendChild(chip);
       });
