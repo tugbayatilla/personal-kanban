@@ -6,6 +6,11 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 cd "$ROOT_DIR"
 
+# Load .env
+if [[ -f "$ROOT_DIR/.env" ]]; then
+  export $(grep -v '^#' "$ROOT_DIR/.env" | xargs)
+fi
+
 # Parse flags
 PUBLISH=false
 while [[ $# -gt 0 ]]; do
@@ -42,8 +47,12 @@ VSIX_FILE=$(ls -t dist/*.vsix | head -1)
 echo "==> Package created: $VSIX_FILE"
 
 if [[ "$PUBLISH" == true ]]; then
+  if [[ -z "${AZURE_PAT:-}" ]]; then
+    echo "Error: AZURE_PAT is not set. Add it to .env or export it before running." >&2
+    exit 1
+  fi
   echo "==> Publishing to VS Code Marketplace..."
-  vsce publish
+  vsce publish --pat "$AZURE_PAT"
   echo "==> Published successfully."
 else
   echo "==> Installing extension locally..."
