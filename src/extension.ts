@@ -71,7 +71,6 @@ function initBoard(): void {
   writeIfMissing(path.join(boardRoot, 'scripts', 'card-edited.js'), SCRIPT_CARD_EDITED);
   writeIfMissing(path.join(boardRoot, 'scripts', 'card-deleted.js'), SCRIPT_CARD_DELETED);
   writeIfMissing(path.join(boardRoot, 'scripts', 'card-moved.js'), SCRIPT_CARD_MOVED);
-  writeIfMissing(path.join(boardRoot, 'scripts', 'git-merged.js'), SCRIPT_GIT_MERGED);
   writeIfMissing(path.join(boardRoot, 'scripts', 'cards-archived.js'), SCRIPT_CARDS_ARCHIVED);
   writeIfMissing(path.join(boardRoot, 'GUIDELINES.md'), GUIDELINES_CONTENT);
 
@@ -85,7 +84,6 @@ function initBoard(): void {
       'card-edited':    { file: 'scripts/card-edited.js' },
       'card-deleted':   { file: 'scripts/card-deleted.js' },
       'card-moved':     { file: 'scripts/card-moved.js' },
-      'git-merged':     { file: 'scripts/git-merged.js' },
       'cards-archived': { file: 'scripts/cards-archived.js' },
     }, vscode.ConfigurationTarget.Workspace);
   }
@@ -98,7 +96,6 @@ function initBoard(): void {
       'card.edited':     ['card-edited'],
       'card.deleted':    ['card-deleted'],
       'card.moved':      ['card-moved'],
-      'git.merged':      ['git-merged'],
       'cards.archived':  ['cards-archived'],
     }, vscode.ConfigurationTarget.Workspace);
   }
@@ -250,33 +247,21 @@ const SCRIPT_CARD_MOVED = `#!/usr/bin/env node
 // Fires whenever a card moves between columns.
 //
 // Hook event: card.moved
-// Payload: { event, timestamp, card_id, card_title, from_column, to_column }
+// Payload: { event, timestamp, card_id, card_title, from_column, to_column, branch }
 //
 // Card files live at: cards/<card_id>.md  (YAML frontmatter + markdown body)
 
 'use strict';
 
-const { readPayload } = require('./lib');
+const { readPayload, notify } = require('./lib');
 
-readPayload('card-moved', ({ card_id, card_title, from_column, to_column }) => {
-  process.stdout.write(\`card moved: "\${card_title}" (\${card_id}) \${from_column} → \${to_column}\\n\`);
-});
-`;
+readPayload('card-moved', ({ card_title, to_column, branch }) => {
+  const message = (to_column === 'done' && branch)
+    ? \`"\${card_title}" moved to Done — branch: \${branch}\`
+    : \`"\${card_title}" moved to \${to_column}\`;
 
-const SCRIPT_GIT_MERGED = `#!/usr/bin/env node
-// Fires after a card's branch is merged into main via the board.
-//
-// Hook event: git.merged
-// Payload: { event, timestamp, card_id, card_title, branch }
-//
-// Card files live at: cards/<card_id>.md  (YAML frontmatter + markdown body)
-
-'use strict';
-
-const { readPayload } = require('./lib');
-
-readPayload('git-merged', ({ card_id, card_title, branch }) => {
-  process.stdout.write(\`branch merged: "\${card_title}" (\${card_id}) — branch: \${branch}\\n\`);
+  notify('Kanban: Card Moved', message);
+  process.stdout.write(message + '\\n');
 });
 `;
 
@@ -369,7 +354,6 @@ Card description and notes in Markdown.
 - \`scripts/card-edited.js\` — Fires when a card's content changes.
 - \`scripts/card-deleted.js\` — Fires when a card is deleted.
 - \`scripts/card-moved.js\` — Fires when a card moves between columns.
-- \`scripts/git-merged.js\` — Fires after a card's branch is merged into main.
 - \`scripts/cards-archived.js\` — Fires after Done cards are archived.
 
 Scripts receive a JSON payload via stdin. Shared helpers (notifications, payload parsing) are in \`scripts/lib.js\`.

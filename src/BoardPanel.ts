@@ -1,6 +1,4 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
-import { execSync } from 'child_process';
 import {
   getBoardRoot,
   readManifest,
@@ -157,45 +155,6 @@ export class BoardPanel {
       }
 
       case 'moveCard': {
-        // When moving to done, run git merge workflow if card has a branch
-        if (msg.toColumn === 'done') {
-          const card = readCard(this._boardRoot, msg.id);
-          if (card?.metadata.branch) {
-            const branch = card.metadata.branch;
-            const confirmed = await vscode.window.showWarningMessage(
-              `Merge branch "${branch}" into main and close this card?`,
-              { modal: true },
-              'Merge'
-            );
-            if (confirmed !== 'Merge') {
-              this._sendState();
-              return;
-            }
-            const workspaceRoot = path.dirname(this._boardRoot);
-            try {
-              const opts = { cwd: workspaceRoot, stdio: 'pipe' as const };
-              try { execSync('git stash', opts); } catch { /* nothing to stash */ }
-              execSync('git checkout main', opts);
-              execSync('git pull origin main', opts);
-              execSync(`git merge --no-ff ${branch} -m "Merge ${branch} into main"`, opts);
-              execSync('git push origin main', opts);
-              execSync(`git branch -D ${branch}`, opts);
-              try { execSync(`git push origin --delete ${branch}`, opts); } catch { /* remote branch may not exist */ }
-              withLock(this._boardRoot, () => writeCard(this._boardRoot, card));
-              const mergeManifest = readManifest(this._boardRoot);
-              fireHook(this._boardRoot, mergeManifest, 'git.merged', {
-                card_id: msg.id,
-                card_title: extractTitle(card.content),
-                branch,
-              });
-            } catch (err) {
-              vscode.window.showErrorMessage(`Git merge failed: ${String(err)}`);
-              this._sendState();
-              return;
-            }
-          }
-        }
-
         this._suppressNextWatch = true;
         const { m3, movedCard } = withLock(this._boardRoot, () => {
           const manifest = readManifest(this._boardRoot);
@@ -221,6 +180,7 @@ export class BoardPanel {
           card_title: movedTitle,
           from_column: msg.fromColumn,
           to_column: msg.toColumn,
+          branch: movedCard?.metadata.branch,
         });
         if (msg.toColumn === 'review') {
           fireHook(this._boardRoot, m3, 'card.reviewed', {
