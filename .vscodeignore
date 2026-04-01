@@ -2,7 +2,6 @@
 src/
 node_modules/
 scripts/
-media/
 *.ts
 esbuild.js
 .eslintrc*
