@@ -22,7 +22,15 @@
       }
       clearTimeout(readyRetry);
       state = { manifest: msg.manifest, cards: msg.cards };
-      if (editingCardId === null) {
+      if (msg.editCardId) {
+        editingCardId = msg.editCardId;
+        render();
+        var ta = document.querySelector('.card.editing textarea');
+        if (ta) {
+          ta.focus();
+          ta.setSelectionRange(ta.value.length, ta.value.length);
+        }
+      } else if (editingCardId === null) {
         render();
       }
     }

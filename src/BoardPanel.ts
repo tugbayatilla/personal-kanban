@@ -66,10 +66,10 @@ export class BoardPanel {
     this._startWatcher();
   }
 
-  private _sendState(): void {
+  private _sendState(editCardId?: string): void {
     try {
       const { manifest, cards } = withLock(this._boardRoot, () => loadBoardState(this._boardRoot));
-      this._panel.webview.postMessage({ type: 'setState', manifest, cards });
+      this._panel.webview.postMessage({ type: 'setState', manifest, cards, editCardId });
     } catch (err) {
       this._panel.webview.postMessage({
         type: 'setState',
@@ -109,7 +109,7 @@ export class BoardPanel {
           card_title: '',
           column: msg.columnId,
         });
-        this._sendState();
+        this._sendState(id);
         break;
       }
 
