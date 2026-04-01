@@ -11,6 +11,7 @@ A file-based personal kanban board for VSCode. The entire board state lives in p
 - **Inline editing** — double-click any card to edit (markdown supported)
 - **Tag system** — write `#tagname` anywhere in a card and tags appear automatically
 - **Live sync** — editing `manifest.json` externally refreshes the board instantly
+- **Card age** — each card shows how long it has been on the board (configurable)
 - **Hooks** — run Node.js scripts on board events (card moved, WIP exceeded, etc.)
 
 ## Commands
@@ -66,7 +67,7 @@ The default columns are **Backlog**, **Refined**, **In Progress**, **Review**, a
 
 Card IDs are stored directly in each column's `cards` array. `wip_limit` triggers a `wip.violated` hook event when a column exceeds its limit.
 
-> **Note:** `tags`, `scripts`, and `hooks` are read from VSCode settings (`.vscode/settings.json`) and are not stored in `manifest.json`.
+> **Note:** `tags`, `scripts`, `hooks`, and `showCardAge` are read from VSCode settings (`.vscode/settings.json`) and are not stored in `manifest.json`.
 
 ### Card file shape
 
@@ -160,6 +161,14 @@ The dominant tag is the one with the highest `weight`.
 Name of the folder (relative to the workspace root) where board data is stored. Change this if `.personal-kanban` conflicts with another tool. Configurable from the Settings UI as a text field.
 
 > **Note:** If you change this after `Init Board` has run, rename the existing folder to match.
+
+### Show card age
+
+```json
+"personal-kanban.showCardAge": true
+```
+
+When `true` (default), each card displays its **age** — the time elapsed since the card was created — as a small badge below the card ID. Formatted as `0m`, `4h`, `3d`, or `2w`. Set to `false` to hide it. Configurable from the Settings UI as a checkbox.
 
 ### Enable hooks
 
