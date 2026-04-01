@@ -54,6 +54,11 @@ if [[ "$PUBLISH" == true ]]; then
   echo "==> Publishing to VS Code Marketplace..."
   vsce publish --pat "$AZURE_PAT"
   echo "==> Published successfully."
+
+  echo "==> Committing version bump..."
+  git add package.json package-lock.json
+  git commit -m "chore: release v$NEW_VERSION"
+  echo "==> Committed as: chore: release v$NEW_VERSION"
 else
   echo "==> Installing extension locally..."
   code --install-extension "$VSIX_FILE" --force
