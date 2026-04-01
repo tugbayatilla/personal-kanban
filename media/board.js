@@ -178,6 +178,14 @@
     idDiv.textContent = id;
     div.appendChild(idDiv);
 
+    if (state.manifest.showCardAge !== false && card.metadata && card.metadata.created_at) {
+      const ageDiv = document.createElement('div');
+      ageDiv.className = 'card-age';
+      ageDiv.title = 'Age: time since card was created';
+      ageDiv.textContent = formatAge(card.metadata.created_at);
+      div.appendChild(ageDiv);
+    }
+
     const titleDiv = document.createElement('div');
     titleDiv.className = 'card-title';
     titleDiv.textContent = title || '(untitled)';
@@ -544,6 +552,17 @@
       seen[t] = true;
       return true;
     });
+  }
+
+  function formatAge(createdAt) {
+    const ms = Date.now() - new Date(createdAt).getTime();
+    const minutes = Math.floor(ms / 60000);
+    if (minutes < 60) return (minutes < 1 ? 0 : minutes) + 'm';
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return hours + 'h';
+    const days = Math.floor(hours / 24);
+    if (days < 7) return days + 'd';
+    return Math.floor(days / 7) + 'w';
   }
 
   function escHtml(str) {

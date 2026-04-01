@@ -17,6 +17,7 @@ export interface Manifest {
   scripts: Record<string, Script>;
   hooks: Record<string, string[]>;
   tagColorTarget: 'tag' | 'card-border' | 'card-background';
+  showCardAge?: boolean;
 }
 
 export interface CardMetadata {

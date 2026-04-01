@@ -56,6 +56,7 @@ export function readManifest(boardRoot: string): Manifest {
   data.scripts = config.get<Manifest['scripts']>('scripts', {});
   data.hooks = config.get<Manifest['hooks']>('hooks', {});
   data.tagColorTarget = config.get<Manifest['tagColorTarget']>('tagColorTarget', 'tag');
+  data.showCardAge = config.get<boolean>('showCardAge', true);
   return data as Manifest;
 }
 
@@ -126,7 +127,7 @@ function atomicWrite(target: string, content: string): void {
 
 export function writeManifest(boardRoot: string, manifest: Manifest): void {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { tags, scripts, hooks, ...toWrite } = manifest;
+  const { tags, scripts, hooks, showCardAge, ...toWrite } = manifest;
   atomicWrite(getManifestPath(boardRoot), JSON.stringify(toWrite, null, 2));
 }
 

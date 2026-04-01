@@ -110,6 +110,11 @@
           "type": "boolean",
           "default": true,
           "description": "Enable hook script execution when board events occur (card moved, created, deleted, etc.)."
+        },
+        "personal-kanban.showCardAge": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the card age (time since creation) as a small badge on each card."
         }
       }
     }
