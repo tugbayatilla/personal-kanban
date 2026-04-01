@@ -55,8 +55,23 @@
             "card-border",
             "card-background"
           ],
+          "enumDescriptions": [
+            "Color the tag chip itself",
+            "Color the card's left border using the dominant tag",
+            "Tint the card background using the dominant tag"
+          ],
           "default": "tag",
-          "description": "Where to apply tag colors on a card. `tag` colors the tag chip; `card-border` colors the card's left border; `card-background` tints the card background. The dominant tag (highest weight) is used for border and background modes."
+          "description": "Where to apply tag colors on a card. The dominant tag (highest weight) is used for border and background modes."
+        },
+        "personal-kanban.boardFolderName": {
+          "type": "string",
+          "default": ".personal-kanban",
+          "description": "Name of the folder (relative to workspace root) where the kanban board data is stored."
+        },
+        "personal-kanban.enableHooks": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable hook script execution when board events occur (card moved, created, deleted, etc.)."
         }
       }
     }

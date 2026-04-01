@@ -139,7 +139,7 @@ Add `#tagname` anywhere in a card's content. Tags are extracted at render time a
 "personal-kanban.tagColorTarget": "tag"
 ```
 
-Controls where tag colors are applied on a card. Options:
+Controls where tag colors are applied on a card. Configurable from the Settings UI as a dropdown. Options:
 
 | Value | Effect |
 |---|---|
@@ -148,6 +148,24 @@ Controls where tag colors are applied on a card. Options:
 | `card-background` | Tints the card background using the dominant tag |
 
 The dominant tag is the one with the highest `weight`.
+
+### Board folder name
+
+```json
+"personal-kanban.boardFolderName": ".personal-kanban"
+```
+
+Name of the folder (relative to the workspace root) where board data is stored. Change this if `.personal-kanban` conflicts with another tool. Configurable from the Settings UI as a text field.
+
+> **Note:** If you change this after `Init Board` has run, rename the existing folder to match.
+
+### Enable hooks
+
+```json
+"personal-kanban.enableHooks": true
+```
+
+When `false`, no hook scripts are executed on board events. Useful for disabling all hook side-effects without removing the script and hook configuration. Configurable from the Settings UI as a checkbox.
 
 ### Scripts & Hooks
 

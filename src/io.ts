@@ -4,7 +4,8 @@ import * as vscode from 'vscode';
 import { Card, Manifest } from './types';
 
 export function getBoardRoot(workspaceRoot: string): string {
-  return path.join(workspaceRoot, '.personal-kanban');
+  const folderName = vscode.workspace.getConfiguration('personal-kanban').get<string>('boardFolderName', '.personal-kanban');
+  return path.join(workspaceRoot, folderName);
 }
 
 export function getManifestPath(boardRoot: string): string {

@@ -38,6 +38,9 @@ export function fireHook(
   event: string,
   payload: Record<string, unknown>
 ): void {
+  const enabled = vscode.workspace.getConfiguration('personal-kanban').get<boolean>('enableHooks', true);
+  if (!enabled) { return; }
+
   const scriptNames = manifest.hooks[event];
   if (!scriptNames || scriptNames.length === 0) {
     return;
