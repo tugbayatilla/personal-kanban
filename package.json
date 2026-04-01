@@ -36,17 +36,55 @@
         "personal-kanban.tags": {
           "type": "object",
           "default": {},
-          "description": "Tag definitions. Each key is a tag name; value is an object with `color` (hex string) and `weight` (number)."
+          "description": "Tag definitions. Each key is a tag name; value is an object with `color` (hex color string) and `weight` (number — higher weight sorts to the top of a column and wins the dominant-tag color).",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "color": {
+                "type": "string",
+                "description": "Hex color string, e.g. \"#e11d48\""
+              },
+              "weight": {
+                "type": "number",
+                "description": "Sort weight. Higher value = higher in column. Highest-weight tag wins card-border / card-background color."
+              }
+            },
+            "required": [
+              "color",
+              "weight"
+            ],
+            "additionalProperties": false
+          }
         },
         "personal-kanban.scripts": {
           "type": "object",
           "default": {},
-          "description": "Script definitions used by hooks. Each key is a script name; value is an object with a `file` path (relative to workspace root)."
+          "description": "Script definitions used by hooks. Each key is a script name; value is an object with a `file` path (relative to the board folder).",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "file": {
+                "type": "string",
+                "description": "Path to the Node.js script, relative to the board folder (e.g. \"scripts/card-moved.js\")"
+              }
+            },
+            "required": [
+              "file"
+            ],
+            "additionalProperties": false
+          }
         },
         "personal-kanban.hooks": {
           "type": "object",
           "default": {},
-          "description": "Event hooks. Each key is an event name (e.g. `card.moved`); value is an array of script names to run."
+          "description": "Event hooks. Each key is an event name (e.g. `card.moved`); value is an array of script names defined in `personal-kanban.scripts`.",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Script name (must be a key in personal-kanban.scripts)"
+            }
+          }
         },
         "personal-kanban.tagColorTarget": {
           "type": "string",

@@ -133,6 +133,8 @@ Add `#tagname` anywhere in a card's content. Tags are extracted at render time a
 
 `color` is a hex string used to tint the tag badge. `weight` controls sort order — higher weight cards sort to the top of their column.
 
+> This setting is edited as JSON. VSCode provides inline validation and autocomplete for `color` and `weight` fields thanks to the bundled schema.
+
 ### Tag color target
 
 ```json
