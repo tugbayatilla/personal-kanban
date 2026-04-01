@@ -133,6 +133,22 @@ Add `#tagname` anywhere in a card's content. Tags are extracted at render time a
 
 `color` is a hex string used to tint the tag badge. `weight` controls sort order — higher weight cards sort to the top of their column.
 
+### Tag color target
+
+```json
+"personal-kanban.tagColorTarget": "tag"
+```
+
+Controls where tag colors are applied on a card. Options:
+
+| Value | Effect |
+|---|---|
+| `tag` (default) | Colors the tag chip itself |
+| `card-border` | Colors the card's left border using the dominant tag |
+| `card-background` | Tints the card background using the dominant tag |
+
+The dominant tag is the one with the highest `weight`.
+
 ### Scripts & Hooks
 
 Scripts are Node.js files that receive a JSON event payload via stdin. Define them under `personal-kanban.scripts` and bind them to events under `personal-kanban.hooks`:
@@ -231,28 +247,33 @@ npm run build
 2. Press `F5` — this launches an **Extension Development Host** window.
 3. In that new window, open any folder, then run the `Personal Kanban:` commands.
 
-### Packaging and installing the VSIX
+### Deploy script
 
-Install the VSCode Extension CLI if you don't have it:
+Use `scripts/deploy.sh` for both local installs and marketplace publishing.
+
+**Local install (dev build)**
+
+```bash
+./scripts/deploy.sh
+```
+
+Packages the extension with name `personal-kanban-dev` and display name `Personal Kanban (Dev)`, then installs it. Because the extension ID differs from the published version (`TGBY.personal-kanban` vs `TGBY.personal-kanban-dev`), both can be installed simultaneously in VSCode — useful for comparing dev changes against the released build.
+
+**Publish to marketplace**
+
+```bash
+./scripts/deploy.sh --publish
+```
+
+Bumps the patch version, publishes to the VS Code Marketplace using `AZURE_PAT` from `.env`, and commits the version bump. Requires `AZURE_PAT` set in a `.env` file at the repo root.
+
+**Prerequisites**
+
+`vsce` is installed automatically if missing. Alternatively:
 
 ```bash
 npm install -g @vscode/vsce
 ```
-
-Package the extension:
-
-```bash
-vsce package
-# produces personal-kanban-{version}.vsix
-```
-
-Install the `.vsix` file:
-
-```bash
-code --install-extension personal-kanban-{version}.vsix
-```
-
-Or in VSCode: open the Extensions sidebar → `...` menu → **Install from VSIX...** → select the file.
 
 ## Source layout
 
