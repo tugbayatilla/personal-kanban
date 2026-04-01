@@ -317,10 +317,11 @@ const GUIDELINES_CONTENT = `# Kanban Board Guidelines
 3. Run the tests and make sure all green.
 4. Append a \`## Plan\` section to the card content describing the implementation approach.
 5. Run tests to confirm green baseline before changing anything.
-6. Make small focused commits with Conventional Commits messages throughout.
-7. Write tests for new behaviour; all must pass before proceeding.
-8. Append a \`## Summary\` section to the card content describing what was done.
-9. Commit remaining work, push branch, move card to review, append \`#claude-code\` to card tag line. Stop.
+6. Implement the solution following the plan.
+7. Make small focused commits with Conventional Commits messages throughout.
+8. Write tests for new behaviour; all must pass before proceeding.
+9. Append a \`## Summary\` section to the card content describing what was done.
+10. Commit remaining work, push branch, move card to review, append \`#claude-code\` to card tag line. Stop.
 
 ### Card Format
 
