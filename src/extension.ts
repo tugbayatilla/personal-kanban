@@ -325,6 +325,20 @@ const GUIDELINES_CONTENT = `# Kanban Board Guidelines
 
 ## Coding
 
+### Implementation Workflow
+
+1. Move card to in-progress: remove id from current column, append to in-progress, update card's \`updated_at\`.
+2. Create branch \`{tag-prefix}/short-name\` from a fresh pull of main; save branch name to card metadata.
+3. Run the tests and make sure all green.
+4. Append a \`## Plan\` section to the card content describing the implementation approach.
+5. Run tests to confirm green baseline before changing anything.
+6. Make small focused commits with Conventional Commits messages throughout.
+7. Write tests for new behaviour; all must pass before proceeding.
+8. Append a \`## Summary\` section to the card content describing what was done.
+9. Commit remaining work, push branch, move card to review, append \`#claude-code\` to card tag line. Stop.
+
+### Card Format
+
 Card files live in \`cards/<id>.md\` and use YAML frontmatter followed by Markdown body:
 
 \`\`\`
