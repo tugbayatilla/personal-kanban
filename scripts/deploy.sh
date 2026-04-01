@@ -32,11 +32,6 @@ npm run typecheck
 echo "==> Running lint..."
 npm run lint
 
-echo "==> Bumping patch version..."
-npm version patch --no-git-tag-version
-NEW_VERSION=$(node -p "require('./package.json').version")
-echo "==> Version bumped to $NEW_VERSION"
-
 echo "==> Building extension..."
 npm run build
 
@@ -51,6 +46,12 @@ if [[ "$PUBLISH" == true ]]; then
     echo "Error: AZURE_PAT is not set. Add it to .env or export it before running." >&2
     exit 1
   fi
+
+  echo "==> Bumping patch version..."
+  npm version patch --no-git-tag-version
+  NEW_VERSION=$(node -p "require('./package.json').version")
+  echo "==> Version bumped to $NEW_VERSION"
+
   echo "==> Publishing to VS Code Marketplace..."
   vsce publish --pat "$AZURE_PAT"
   echo "==> Published successfully."
