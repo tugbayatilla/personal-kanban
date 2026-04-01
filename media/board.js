@@ -189,6 +189,11 @@
         const chip = document.createElement('span');
         chip.className = 'tag-chip';
         chip.textContent = '#' + tag;
+        const tagDef = state.manifest.tags && state.manifest.tags[tag];
+        if (tagDef && tagDef.color) {
+          chip.style.backgroundColor = tagDef.color;
+          chip.style.color = '#fff';
+        }
         tagsDiv.appendChild(chip);
       });
       div.appendChild(tagsDiv);
