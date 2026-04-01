@@ -10,20 +10,20 @@
   <!-- Column 3 (right) -->
   <rect x="86" y="18" width="30" height="92" rx="6" fill="#2a2a2a"/>
 
-  <!-- Cards in column 1 -->
+  <!-- Cards in column 1 (red) -->
   <rect x="16" y="24" width="22" height="10" rx="3" fill="#e53935"/>
   <rect x="16" y="38" width="22" height="10" rx="3" fill="#c62828"/>
   <rect x="16" y="52" width="22" height="10" rx="3" fill="#b71c1c"/>
 
-  <!-- Cards in column 2 -->
-  <rect x="53" y="24" width="22" height="10" rx="3" fill="#e53935"/>
-  <rect x="53" y="38" width="22" height="10" rx="3" fill="#c62828"/>
+  <!-- Cards in column 2 (orange) -->
+  <rect x="53" y="24" width="22" height="10" rx="3" fill="#fb8c00"/>
+  <rect x="53" y="38" width="22" height="10" rx="3" fill="#e65100"/>
 
-  <!-- Cards in column 3 (one card, accent) -->
-  <rect x="90" y="24" width="22" height="10" rx="3" fill="#e53935"/>
+  <!-- Cards in column 3 (green) -->
+  <rect x="90" y="24" width="22" height="10" rx="3" fill="#43a047"/>
 
-  <!-- Red accent dot / indicator in bottom-right of logo -->
-  <circle cx="101" cy="101" r="9" fill="#e53935"/>
+  <!-- Green accent dot / indicator in bottom-right of logo -->
+  <circle cx="101" cy="101" r="9" fill="#43a047"/>
   <!-- Checkmark inside dot -->
   <polyline points="96,101 99.5,104.5 106,98" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
