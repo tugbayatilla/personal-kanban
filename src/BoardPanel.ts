@@ -66,7 +66,7 @@ export class BoardPanel {
 
   private _sendState(): void {
     try {
-      const { manifest, cards } = loadBoardState(this._boardRoot);
+      const { manifest, cards } = withLock(this._boardRoot, () => loadBoardState(this._boardRoot));
       this._panel.webview.postMessage({ type: 'setState', manifest, cards });
     } catch (err) {
       this._panel.webview.postMessage({

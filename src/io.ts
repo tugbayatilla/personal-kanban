@@ -91,9 +91,8 @@ export function withLock<T>(boardRoot: string, fn: () => T): T {
         } catch { /* ignore */ }
         throw new Error(`manifest.lock: could not acquire within ${LOCK_TIMEOUT_MS}ms`);
       }
-      // Spin-wait before retrying
-      const until = Date.now() + LOCK_RETRY_MS;
-      while (Date.now() < until) { /* spin */ }
+      // Sleep without burning CPU (Atomics.wait is a real block, not a spin)
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, LOCK_RETRY_MS);
     }
   }
 
@@ -104,13 +103,29 @@ export function withLock<T>(boardRoot: string, fn: () => T): T {
   }
 }
 
-export function writeManifest(boardRoot: string, manifest: Manifest): void {
-  const target = getManifestPath(boardRoot);
+/** Write content to tmp, fsync, then atomically rename to target. */
+function atomicWrite(target: string, content: string): void {
   const tmp = target + '.tmp';
+  const fd = fs.openSync(tmp, 'w');
+  try {
+    fs.writeSync(fd, content);
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+  fs.renameSync(tmp, target);
+  // Best-effort fsync of parent directory (POSIX only)
+  try {
+    const dirFd = fs.openSync(path.dirname(target), fs.constants.O_RDONLY);
+    try { fs.fsyncSync(dirFd); } catch { /* ignore */ }
+    finally { try { fs.closeSync(dirFd); } catch { /* ignore */ } }
+  } catch { /* ignore on Windows or unsupported FS */ }
+}
+
+export function writeManifest(boardRoot: string, manifest: Manifest): void {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { tags, scripts, hooks, ...toWrite } = manifest;
-  fs.writeFileSync(tmp, JSON.stringify(toWrite, null, 2), 'utf-8');
-  fs.renameSync(tmp, target);
+  atomicWrite(getManifestPath(boardRoot), JSON.stringify(toWrite, null, 2));
 }
 
 function parseCardMd(raw: string, id: string): Card {
@@ -184,9 +199,7 @@ export function writeCard(boardRoot: string, card: Card): void {
   const folder = path.join(boardRoot, 'cards');
   fs.mkdirSync(folder, { recursive: true });
   const target = path.join(folder, `${card.id}.md`);
-  const tmp = target + '.tmp';
-  fs.writeFileSync(tmp, serializeCardMd(card), 'utf-8');
-  fs.renameSync(tmp, target);
+  atomicWrite(target, serializeCardMd(card));
   // Remove legacy .json file if it exists
   const jsonPath = path.join(boardRoot, 'cards', `${card.id}.json`);
   if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath);
