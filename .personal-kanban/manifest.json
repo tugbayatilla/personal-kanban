@@ -29,7 +29,9 @@
       "id": "review",
       "label": "Review",
       "wip_limit": null,
-      "cards": []
+      "cards": [
+        "20260401-f53f"
+      ]
     },
     {
       "id": "done",
