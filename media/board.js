@@ -179,12 +179,12 @@
     idDiv.className = 'card-id';
     idDiv.textContent = id;
     idRow.appendChild(idDiv);
-    if (state.manifest.showCardAge !== false && card.metadata && card.metadata.created_at) {
-      const ageSpan = document.createElement('span');
-      ageSpan.className = 'card-age';
-      ageSpan.title = 'Age: time since card was created';
-      ageSpan.textContent = formatAge(card.metadata.created_at);
-      idRow.appendChild(ageSpan);
+    if (state.manifest.showCardAge !== false && card.metadata && card.metadata.created_at && card.metadata.done_at) {
+      const ltSpan = document.createElement('span');
+      ltSpan.className = 'card-lead-time';
+      ltSpan.title = 'Lead time: creation to done';
+      ltSpan.textContent = formatDuration(card.metadata.created_at, card.metadata.done_at);
+      idRow.appendChild(ltSpan);
     }
     div.appendChild(idRow);
 
@@ -267,11 +267,13 @@
       function metaRow(label, value) {
         return '<div><span class="meta-label">' + escHtml(label) + '</span>' + escHtml(value || '—') + '</div>';
       }
-      const knownKeys = ['created_at', 'updated_at', 'branch', 'archived_at'];
+      const knownKeys = ['created_at', 'active_at', 'done_at', 'branch', 'archived_at'];
       let rows = metaRow('id:', id) +
         metaRow('created:', meta.created_at ? new Date(meta.created_at).toLocaleString() : '') +
-        (meta.created_at ? metaRow('age:', formatAge(meta.created_at)) : '') +
-        metaRow('updated:', meta.updated_at ? new Date(meta.updated_at).toLocaleString() : '') +
+        (meta.active_at ? metaRow('active:', new Date(meta.active_at).toLocaleString()) : '') +
+        (meta.done_at ? metaRow('done:', new Date(meta.done_at).toLocaleString()) : '') +
+        (meta.done_at ? metaRow('lead time:', formatDuration(meta.created_at, meta.done_at)) : '') +
+        (meta.active_at && meta.done_at ? metaRow('cycle time:', formatDuration(meta.active_at, meta.done_at)) : '') +
         metaRow('branch:', meta.branch || '') +
         (meta.archived_at ? metaRow('archived:', new Date(meta.archived_at).toLocaleString()) : '');
       Object.keys(meta).forEach(function (key) {
@@ -557,8 +559,8 @@
     });
   }
 
-  function formatAge(createdAt) {
-    const ms = Date.now() - new Date(createdAt).getTime();
+  function formatDuration(fromAt, toAt) {
+    const ms = new Date(toAt).getTime() - new Date(fromAt).getTime();
     const minutes = Math.floor(ms / 60000);
     if (minutes < 60) return (minutes < 1 ? 0 : minutes) + 'm';
     const hours = Math.floor(minutes / 60);

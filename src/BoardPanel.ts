@@ -93,7 +93,7 @@ export class BoardPanel {
         const card: Card = {
           id,
           content: '',
-          metadata: { created_at: now, updated_at: now },
+          metadata: { created_at: now },
         };
         this._suppressNextWatch = true;
         const m1 = withLock(this._boardRoot, () => {
@@ -174,6 +174,17 @@ export class BoardPanel {
             dstCol.cards.splice(toIdx, 0, msg.id);
           }
           writeManifest(this._boardRoot, manifest);
+          // Stamp timestamps on card
+          if (card) {
+            const now = new Date().toISOString();
+            if (msg.toColumn === 'in-progress' && !card.metadata.active_at) {
+              card.metadata.active_at = now;
+            }
+            if (msg.toColumn === 'done') {
+              card.metadata.done_at = now;
+            }
+            writeCard(this._boardRoot, card);
+          }
           return { m3: manifest, movedCard: card };
         });
         const movedTitle = movedCard ? extractTitle(movedCard.content) : '';

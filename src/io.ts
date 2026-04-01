@@ -135,7 +135,7 @@ function parseCardMd(raw: string, id: string): Card {
   const now = new Date().toISOString();
   const match = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (!match) {
-    return { id, content: raw, metadata: { created_at: now, updated_at: now } };
+    return { id, content: raw, metadata: { created_at: now } };
   }
   const fm: Record<string, string> = {};
   for (const line of match[1].split('\n')) {
@@ -148,7 +148,8 @@ function parseCardMd(raw: string, id: string): Card {
     content: match[2].replace(/^\n/, ''),
     metadata: {
       created_at: fm.created_at ?? now,
-      updated_at: fm.updated_at ?? now,
+      ...(fm.active_at ? { active_at: fm.active_at } : {}),
+      ...(fm.done_at ? { done_at: fm.done_at } : {}),
       ...(fm.branch ? { branch: fm.branch } : {}),
       ...(fm.archived_at ? { archived_at: fm.archived_at } : {}),
     },
@@ -160,8 +161,13 @@ function serializeCardMd(card: Card): string {
     '---',
     `id: ${card.id}`,
     `created_at: ${card.metadata.created_at}`,
-    `updated_at: ${card.metadata.updated_at}`,
   ];
+  if (card.metadata.active_at) {
+    lines.push(`active_at: ${card.metadata.active_at}`);
+  }
+  if (card.metadata.done_at) {
+    lines.push(`done_at: ${card.metadata.done_at}`);
+  }
   if (card.metadata.branch) {
     lines.push(`branch: ${card.metadata.branch}`);
   }
@@ -198,7 +204,6 @@ export function readCard(boardRoot: string, id: string): Card | null {
 }
 
 export function writeCard(boardRoot: string, card: Card): void {
-  card.metadata.updated_at = new Date().toISOString();
   const folder = path.join(boardRoot, 'cards');
   fs.mkdirSync(folder, { recursive: true });
   const target = path.join(folder, `${card.id}.md`);

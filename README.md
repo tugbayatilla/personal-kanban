@@ -11,7 +11,7 @@ A file-based personal kanban board for VSCode. The entire board state lives in p
 - **Inline editing** — double-click any card to edit (markdown supported)
 - **Tag system** — write `#tagname` anywhere in a card and tags appear automatically
 - **Live sync** — editing `manifest.json` externally refreshes the board instantly
-- **Card age** — each card shows how long it has been on the board (configurable)
+- **Lead time & cycle time** — done cards show lead time (creation → done); the metadata popup shows both lead time and cycle time (in-progress → done)
 - **Hooks** — run Node.js scripts on board events (card moved, WIP exceeded, etc.)
 
 ## Commands
@@ -67,7 +67,7 @@ The default columns are **Backlog**, **Refined**, **In Progress**, **Review**, a
 
 Card IDs are stored directly in each column's `cards` array. `wip_limit` triggers a `wip.violated` hook event when a column exceeds its limit.
 
-> **Note:** `tags`, `scripts`, `hooks`, and `showCardAge` are read from VSCode settings (`.vscode/settings.json`) and are not stored in `manifest.json`.
+> **Note:** `tags`, `scripts`, `hooks`, and `showCardAge` (lead time badge) are read from VSCode settings (`.vscode/settings.json`) and are not stored in `manifest.json`.
 
 ### Card file shape
 
@@ -77,7 +77,8 @@ Cards live in `cards/{id}.md` as YAML frontmatter followed by a Markdown body:
 ---
 id: 20260326-b7c2
 created_at: 2026-03-26T10:00:00.000Z
-updated_at: 2026-03-26T10:00:00.000Z
+active_at: 2026-03-27T09:00:00.000Z
+done_at: 2026-03-28T15:00:00.000Z
 branch: feature/card-title
 ---
 
@@ -90,6 +91,8 @@ Description text.
 
 - The first line of the body should be space-separated `#tags`.
 - The card title is the first H1 (`#`) heading.
+- `active_at` is stamped automatically when the card is first moved to the `in-progress` column.
+- `done_at` is stamped automatically each time the card is moved to the `done` column.
 - `branch` is set when work begins on a card and cleared after the branch is merged.
 - Archived cards are identical in format and live in `archive/{id}.md`.
 
@@ -162,13 +165,15 @@ Name of the folder (relative to the workspace root) where board data is stored. 
 
 > **Note:** If you change this after `Init Board` has run, rename the existing folder to match.
 
-### Show card age
+### Show lead time
 
 ```json
 "personal-kanban.showCardAge": true
 ```
 
-When `true` (default), each card displays its **age** — the time elapsed since the card was created — as a small badge below the card ID. Formatted as `0m`, `4h`, `3d`, or `2w`. Set to `false` to hide it. Configurable from the Settings UI as a checkbox.
+When `true` (default), done cards display their **lead time** — the duration from creation to done — as a small badge below the card ID. Formatted as `0m`, `4h`, `3d`, or `2w`. Set to `false` to hide it. Configurable from the Settings UI as a checkbox.
+
+The card metadata popup (ⓘ button) also shows **cycle time** — the duration from when the card entered `in-progress` to when it was moved to `done`.
 
 ### Enable hooks
 

@@ -22,7 +22,8 @@ export interface Manifest {
 
 export interface CardMetadata {
   created_at: string;
-  updated_at: string;
+  active_at?: string;
+  done_at?: string;
   branch?: string;
   archived_at?: string;
 }
