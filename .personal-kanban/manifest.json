@@ -6,6 +6,7 @@
       "label": "Backlog",
       "wip_limit": null,
       "cards": [
+        "20260401-6a58",
         "20260328-5bf4",
         "20260328-7235",
         "20260328-f970"
@@ -16,14 +17,17 @@
       "label": "Refined",
       "wip_limit": 2,
       "cards": [
-        "20260401-1876"
+        "20260401-6443",
+        "20260401-87d9"
       ]
     },
     {
       "id": "in-progress",
       "label": "In Progress",
       "wip_limit": 1,
-      "cards": []
+      "cards": [
+        "20260401-1876"
+      ]
     },
     {
       "id": "review",

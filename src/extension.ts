@@ -67,6 +67,7 @@ function initBoard(): void {
   writeIfMissing(path.join(boardRoot, 'scripts', 'card-reviewed.js'), SCRIPT_CARD_REVIEWED);
   writeIfMissing(path.join(boardRoot, 'scripts', 'wip-alert.js'), SCRIPT_WIP_ALERT);
   writeIfMissing(path.join(boardRoot, 'scripts', 'card-created.js'), SCRIPT_CARD_CREATED);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'card-edited.js'), SCRIPT_CARD_EDITED);
   writeIfMissing(path.join(boardRoot, 'scripts', 'card-deleted.js'), SCRIPT_CARD_DELETED);
   writeIfMissing(path.join(boardRoot, 'scripts', 'card-moved.js'), SCRIPT_CARD_MOVED);
   writeIfMissing(path.join(boardRoot, 'scripts', 'git-merged.js'), SCRIPT_GIT_MERGED);
@@ -80,6 +81,7 @@ function initBoard(): void {
       'card-reviewed':  { file: 'scripts/card-reviewed.js' },
       'wip-alert':      { file: 'scripts/wip-alert.js' },
       'card-created':   { file: 'scripts/card-created.js' },
+      'card-edited':    { file: 'scripts/card-edited.js' },
       'card-deleted':   { file: 'scripts/card-deleted.js' },
       'card-moved':     { file: 'scripts/card-moved.js' },
       'git-merged':     { file: 'scripts/git-merged.js' },
@@ -92,6 +94,7 @@ function initBoard(): void {
       'card.reviewed':   ['card-reviewed'],
       'wip.violated':    ['wip-alert'],
       'card.created':    ['card-created'],
+      'card.edited':     ['card-edited'],
       'card.deleted':    ['card-deleted'],
       'card.moved':      ['card-moved'],
       'git.merged':      ['git-merged'],
@@ -231,6 +234,33 @@ process.stdin.on('end', () => {
 
   const { card_id, card_title, column } = payload;
   process.stdout.write(\`card created: "\${card_title}" (\${card_id}) in \${column}\\n\`);
+});
+`;
+
+const SCRIPT_CARD_EDITED = `#!/usr/bin/env node
+// Fires when a card's content changes.
+//
+// Hook event: card.edited
+// Payload: { event, timestamp, card_id, card_title }
+//
+// Card files live at: cards/<card_id>.md  (YAML frontmatter + markdown body)
+
+'use strict';
+
+let raw = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', chunk => { raw += chunk; });
+process.stdin.on('end', () => {
+  let payload;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    process.stderr.write('card-edited: invalid JSON payload\\n');
+    process.exit(1);
+  }
+
+  const { card_id, card_title } = payload;
+  process.stdout.write(\`card edited: "\${card_title}" (\${card_id})\\n\`);
 });
 `;
 

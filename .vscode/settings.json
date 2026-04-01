@@ -9,6 +9,9 @@
         "card-created": {
             "file": "scripts/card-created.js"
         },
+        "card-edited": {
+            "file": "scripts/card-edited.js"
+        },
         "card-deleted": {
             "file": "scripts/card-deleted.js"
         },
@@ -31,6 +34,9 @@
         ],
         "card.created": [
             "card-created"
+        ],
+        "card.edited": [
+            "card-edited"
         ],
         "card.deleted": [
             "card-deleted"

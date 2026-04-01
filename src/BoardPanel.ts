@@ -115,9 +115,14 @@ export class BoardPanel {
 
       case 'saveCard': {
         const existing = readCard(this._boardRoot, msg.id);
-        if (existing) {
+        if (existing && existing.content !== msg.content) {
           existing.content = msg.content;
           writeCard(this._boardRoot, existing);
+          const manifest = readManifest(this._boardRoot);
+          fireHook(this._boardRoot, manifest, 'card.edited', {
+            card_id: msg.id,
+            card_title: extractTitle(msg.content),
+          });
         }
         this._sendState();
         break;
