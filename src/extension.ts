@@ -57,6 +57,7 @@ function initBoard(): void {
       tags: {},
       scripts: {},
       hooks: {},  // in-memory only; written from VSCode settings, not to file
+      tagColorTarget: 'tag',
     };
     withLock(boardRoot, () => writeManifest(boardRoot, manifest));
   }
