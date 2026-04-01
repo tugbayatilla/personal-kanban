@@ -323,10 +323,42 @@ const GUIDELINES_CONTENT = `# Kanban Board Guidelines
 - \`chore\` — Maintenance, dependency updates, tooling.
 - \`urgent\` — Needs attention before other work.
 
+## Coding
+
+Card files live in \`cards/<id>.md\` and use YAML frontmatter followed by Markdown body:
+
+\`\`\`
+---
+id: <YYYYMMDD-xxxx>
+created_at: <ISO-8601>
+updated_at: <ISO-8601>
+branch: <branch-name>       # optional — set when work starts
+archived_at: <ISO-8601>     # optional — set when archived
+---
+
+#tag1 #tag2
+
+# Card Title
+
+Card description and notes in Markdown.
+\`\`\`
+
+- The first line of the body should be a space-separated list of \`#tags\`.
+- The card title is the first H1 (\`#\`) heading.
+- Everything after the title is free-form Markdown.
+
 ## Scripts & Hooks
 
-- \`scripts/card-reviewed.js\` — Sends a system notification when a card moves to Review.
-- \`scripts/wip-alert.js\` — Sends a system notification when a WIP limit is exceeded.
+- \`scripts/card-reviewed.js\` — Fires when a card moves to Review.
+- \`scripts/wip-alert.js\` — Fires when a WIP limit is exceeded.
+- \`scripts/card-created.js\` — Fires when a new card is created.
+- \`scripts/card-edited.js\` — Fires when a card's content changes.
+- \`scripts/card-deleted.js\` — Fires when a card is deleted.
+- \`scripts/card-moved.js\` — Fires when a card moves between columns.
+- \`scripts/git-merged.js\` — Fires after a card's branch is merged into main.
+- \`scripts/cards-archived.js\` — Fires after Done cards are archived.
+
+Scripts receive a JSON payload via stdin. Shared helpers (notifications, payload parsing) are in \`scripts/lib.js\`.
 
 Customize or add scripts in \`.vscode/settings.json\` under \`personal-kanban.scripts\` and \`personal-kanban.hooks\`.
 `;
