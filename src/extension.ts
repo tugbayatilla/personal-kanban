@@ -326,7 +326,8 @@ const GUIDELINES_CONTENT = `# Kanban Board Guidelines
 7. Make small focused commits with Conventional Commits messages throughout.
 8. Write tests for new behaviour; all must pass before proceeding.
 9. Append a \`## Summary\` section to the card content describing what was done.
-10. Commit remaining work, push branch, move card to review, append \`#claude-code\` to card tag line. Stop.
+10. Update relevant documentation (README, changelogs, inline docs) to reflect the changes.
+11. Commit remaining work, push branch, move card to review, append \`#claude-code\` to card tag line. Stop.
 
 ### Card Format
 
