@@ -25,9 +25,7 @@
       "id": "in-progress",
       "label": "In Progress",
       "wip_limit": 1,
-      "cards": [
-        "20260401-1876"
-      ]
+      "cards": []
     },
     {
       "id": "review",
@@ -40,6 +38,7 @@
       "label": "Done",
       "wip_limit": null,
       "cards": [
+        "20260401-1876",
         "20260401-f53f"
       ]
     }
