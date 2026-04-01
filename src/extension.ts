@@ -15,7 +15,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('personal-kanban.initBoard', () => initBoard()),
     vscode.commands.registerCommand('personal-kanban.openBoard', () => {
       const root = getWorkspaceRoot();
-      if (root) BoardPanel.createOrShow(context, root);
+      if (root) BoardPanel.createOrShow(context, root, channel);
     })
   );
 }

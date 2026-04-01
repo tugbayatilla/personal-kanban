@@ -23,9 +23,10 @@ export class BoardPanel {
   private _disposables: vscode.Disposable[] = [];
   private _suppressNextWatch = false;
 
-  public static createOrShow(context: vscode.ExtensionContext, workspaceRoot: string): void {
+  public static createOrShow(context: vscode.ExtensionContext, workspaceRoot: string, channel: vscode.OutputChannel): void {
     if (BoardPanel.currentPanel) {
       BoardPanel.currentPanel._panel.reveal();
+      channel.show(true);
       return;
     }
     const panel = vscode.window.createWebviewPanel(
@@ -40,6 +41,7 @@ export class BoardPanel {
     );
     BoardPanel.currentPanel = new BoardPanel(panel, workspaceRoot, context.extensionUri);
     context.subscriptions.push({ dispose: () => BoardPanel.currentPanel?._dispose() });
+    channel.show(true);
   }
 
   private constructor(panel: vscode.WebviewPanel, workspaceRoot: string, extensionUri: vscode.Uri) {
