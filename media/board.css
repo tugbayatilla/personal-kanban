@@ -104,14 +104,19 @@ body {
 .card-id {
   font-size: 10px;
   color: var(--vscode-descriptionForeground, rgba(128,128,128,0.6));
-  margin-bottom: 4px;
   user-select: text;
+}
+
+.card-id-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
 }
 
 .card-age {
   font-size: 10px;
   color: var(--vscode-descriptionForeground, rgba(128,128,128,0.6));
-  margin-bottom: 4px;
 }
 
 .card-title {

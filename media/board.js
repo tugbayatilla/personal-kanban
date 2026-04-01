@@ -173,18 +173,20 @@
     div.dataset.column = columnId;
     div.draggable = true;
 
-    const idDiv = document.createElement('div');
+    const idRow = document.createElement('div');
+    idRow.className = 'card-id-row';
+    const idDiv = document.createElement('span');
     idDiv.className = 'card-id';
     idDiv.textContent = id;
-    div.appendChild(idDiv);
-
+    idRow.appendChild(idDiv);
     if (state.manifest.showCardAge !== false && card.metadata && card.metadata.created_at) {
-      const ageDiv = document.createElement('div');
-      ageDiv.className = 'card-age';
-      ageDiv.title = 'Age: time since card was created';
-      ageDiv.textContent = formatAge(card.metadata.created_at);
-      div.appendChild(ageDiv);
+      const ageSpan = document.createElement('span');
+      ageSpan.className = 'card-age';
+      ageSpan.title = 'Age: time since card was created';
+      ageSpan.textContent = formatAge(card.metadata.created_at);
+      idRow.appendChild(ageSpan);
     }
+    div.appendChild(idRow);
 
     const titleDiv = document.createElement('div');
     titleDiv.className = 'card-title';
@@ -268,6 +270,7 @@
       const knownKeys = ['created_at', 'updated_at', 'branch', 'archived_at'];
       let rows = metaRow('id:', id) +
         metaRow('created:', meta.created_at ? new Date(meta.created_at).toLocaleString() : '') +
+        (meta.created_at ? metaRow('age:', formatAge(meta.created_at)) : '') +
         metaRow('updated:', meta.updated_at ? new Date(meta.updated_at).toLocaleString() : '') +
         metaRow('branch:', meta.branch || '') +
         (meta.archived_at ? metaRow('archived:', new Date(meta.archived_at).toLocaleString()) : '');
