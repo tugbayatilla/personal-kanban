@@ -61,6 +61,11 @@ body {
   font-weight: 600;
 }
 
+.card-count--exceeded {
+  background: var(--vscode-inputValidation-errorBackground, rgba(180,30,30,0.3));
+  color: var(--vscode-inputValidation-errorForeground, #f44);
+}
+
 .cards {
   flex: 1;
   overflow-y: auto;

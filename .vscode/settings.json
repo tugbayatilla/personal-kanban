@@ -1,0 +1,66 @@
+{
+    "personal-kanban.scripts": {
+        "card-reviewed": {
+            "file": "scripts/card-reviewed.js"
+        },
+        "wip-alert": {
+            "file": "scripts/wip-alert.js"
+        },
+        "card-created": {
+            "file": "scripts/card-created.js"
+        },
+        "card-deleted": {
+            "file": "scripts/card-deleted.js"
+        },
+        "card-moved": {
+            "file": "scripts/card-moved.js"
+        },
+        "git-merged": {
+            "file": "scripts/git-merged.js"
+        },
+        "cards-archived": {
+            "file": "scripts/cards-archived.js"
+        }
+    },
+    "personal-kanban.hooks": {
+        "card.reviewed": [
+            "card-reviewed"
+        ],
+        "wip.violated": [
+            "wip-alert"
+        ],
+        "card.created": [
+            "card-created"
+        ],
+        "card.deleted": [
+            "card-deleted"
+        ],
+        "card.moved": [
+            "card-moved"
+        ],
+        "git.merged": [
+            "git-merged"
+        ],
+        "cards.archived": [
+            "cards-archived"
+        ]
+    },
+    "personal-kanban.tags": {
+        "bug": {
+            "color": "#e11d48",
+            "weight": 10
+        },
+        "feature": {
+            "color": "#2563eb",
+            "weight": 5
+        },
+        "chore": {
+            "color": "#6b7280",
+            "weight": 1
+        },
+        "urgent": {
+            "color": "#f97316",
+            "weight": 20
+        }
+    }
+}

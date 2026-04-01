@@ -16,7 +16,7 @@
       "label": "Refined",
       "wip_limit": 2,
       "cards": [
-        "20260331-e814"
+        "20260401-1876"
       ]
     },
     {
@@ -29,15 +29,15 @@
       "id": "review",
       "label": "Review",
       "wip_limit": null,
-      "cards": [
-        "20260401-f53f"
-      ]
+      "cards": []
     },
     {
       "id": "done",
       "label": "Done",
       "wip_limit": null,
-      "cards": []
+      "cards": [
+        "20260401-f53f"
+      ]
     }
   ],
   "name": ""

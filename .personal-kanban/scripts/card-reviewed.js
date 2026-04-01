@@ -2,7 +2,9 @@
 // Fires a system notification when a card moves to Review.
 //
 // Hook event: card.reviewed
-// Payload: { card_id, card_title, from_column, branch }
+// Payload: { event, timestamp, card_id, card_title, from_column, branch }
+//
+// Card files live at: cards/<card_id>.md  (YAML frontmatter + markdown body)
 
 'use strict';
 
@@ -31,7 +33,7 @@ process.stdin.on('end', () => {
   try {
     payload = JSON.parse(raw);
   } catch {
-    process.stderr.write('Error: invalid JSON payload\n');
+    process.stderr.write('card-reviewed: invalid JSON payload\n');
     process.exit(1);
   }
 

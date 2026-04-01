@@ -83,8 +83,11 @@
     titleSpan.textContent = col.label;
 
     const countSpan = document.createElement('span');
-    countSpan.className = 'card-count';
-    countSpan.textContent = String(cardIds.length);
+    const wipExceeded = col.wip_limit !== null && col.wip_limit !== undefined && cardIds.length > col.wip_limit;
+    countSpan.className = 'card-count' + (wipExceeded ? ' card-count--exceeded' : '');
+    countSpan.textContent = col.wip_limit !== null && col.wip_limit !== undefined
+      ? cardIds.length + '/' + col.wip_limit
+      : String(cardIds.length);
 
     header.appendChild(titleSpan);
     header.appendChild(countSpan);

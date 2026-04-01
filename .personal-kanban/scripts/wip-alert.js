@@ -2,7 +2,7 @@
 // Fires a system notification when a WIP limit is exceeded.
 //
 // Hook event: wip.violated
-// Payload: { column, wip_limit, current_count, card_id }
+// Payload: { event, timestamp, column, wip_limit, current_count, card_id }
 
 'use strict';
 
@@ -31,7 +31,7 @@ process.stdin.on('end', () => {
   try {
     payload = JSON.parse(raw);
   } catch {
-    process.stderr.write('Error: invalid JSON payload\n');
+    process.stderr.write('wip-alert: invalid JSON payload\n');
     process.exit(1);
   }
 
@@ -39,5 +39,5 @@ process.stdin.on('end', () => {
   const message = `WIP limit exceeded in "${column}": ${current_count} cards (limit: ${wip_limit})`;
 
   notify('Kanban WIP Alert', message);
-  process.stderr.write(message + '\n');
+  process.stdout.write(message + '\n');
 });
