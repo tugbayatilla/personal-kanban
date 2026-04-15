@@ -26,6 +26,7 @@ export interface CardMetadata {
   done_at?: string;
   branch?: string;
   archived_at?: string;
+  [key: string]: string | undefined;
 }
 
 export interface Card {

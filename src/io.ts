@@ -143,6 +143,13 @@ function parseCardMd(raw: string, id: string): Card {
     if (colon === -1) continue;
     fm[line.slice(0, colon).trim()] = line.slice(colon + 1).trim();
   }
+  const knownKeys = new Set(['id', 'created_at', 'active_at', 'done_at', 'branch', 'archived_at']);
+  const extra: Record<string, string> = {};
+  for (const key of Object.keys(fm)) {
+    if (!knownKeys.has(key)) {
+      extra[key] = fm[key];
+    }
+  }
   return {
     id,
     content: match[2].replace(/^\n/, ''),
@@ -152,6 +159,7 @@ function parseCardMd(raw: string, id: string): Card {
       ...(fm.done_at ? { done_at: fm.done_at } : {}),
       ...(fm.branch ? { branch: fm.branch } : {}),
       ...(fm.archived_at ? { archived_at: fm.archived_at } : {}),
+      ...extra,
     },
   };
 }
@@ -173,6 +181,12 @@ function serializeCardMd(card: Card): string {
   }
   if (card.metadata.archived_at) {
     lines.push(`archived_at: ${card.metadata.archived_at}`);
+  }
+  const knownKeys = new Set(['created_at', 'active_at', 'done_at', 'branch', 'archived_at']);
+  for (const [key, value] of Object.entries(card.metadata)) {
+    if (!knownKeys.has(key) && value !== undefined) {
+      lines.push(`${key}: ${value}`);
+    }
   }
   lines.push('---', '');
   lines.push(card.content);
