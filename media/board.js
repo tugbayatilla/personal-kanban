@@ -246,118 +246,35 @@
       div.appendChild(tagsDiv);
     }
 
-    // Info button (display metadata)
-    const infoBtn = document.createElement('button');
-    infoBtn.className = 'info-btn';
-    infoBtn.textContent = '\u24d8';
-    infoBtn.title = 'Card metadata';
-    infoBtn.addEventListener('mousedown', function (e) {
-      e.preventDefault();
-    });
-    infoBtn.addEventListener('click', function (e) {
+    // Menu button (⋮)
+    const menuBtn = document.createElement('button');
+    menuBtn.className = 'card-menu-btn';
+    menuBtn.textContent = '\u22ee';
+    menuBtn.title = 'Card actions';
+    menuBtn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    menuBtn.addEventListener('click', function (e) {
       e.stopPropagation();
-      const existing = div.querySelector('.card-metadata-popup');
-      if (existing) {
-        existing.remove();
-        return;
-      }
-      const meta = (state.cards[id] && state.cards[id].metadata) || {};
-      const popup = document.createElement('div');
-      popup.className = 'card-metadata-popup';
-      function metaRow(label, value) {
-        return '<div><span class="meta-label">' + escHtml(label) + '</span>' + escHtml(value || '—') + '</div>';
-      }
-      const knownKeys = ['created_at', 'active_at', 'done_at', 'branch', 'archived_at'];
-      let rows = metaRow('id:', id) +
-        metaRow('created:', meta.created_at ? new Date(meta.created_at).toLocaleString() : '') +
-        (meta.active_at ? metaRow('active:', new Date(meta.active_at).toLocaleString()) : '') +
-        (meta.done_at ? metaRow('done:', new Date(meta.done_at).toLocaleString()) : '') +
-        (meta.done_at ? metaRow('lead time:', formatDuration(meta.created_at, meta.done_at)) : '') +
-        (meta.active_at && meta.done_at ? metaRow('cycle time:', formatDuration(meta.active_at, meta.done_at)) : '') +
-        metaRow('branch:', meta.branch || '') +
-        (meta.archived_at ? metaRow('archived:', new Date(meta.archived_at).toLocaleString()) : '');
-      Object.keys(meta).forEach(function (key) {
-        if (!knownKeys.includes(key)) {
-          rows += metaRow(key + ':', String(meta[key]));
-        }
-      });
-      popup.innerHTML = rows;
-      div.appendChild(popup);
-      function closePopup(ev) {
-        if (!popup.contains(ev.target) && ev.target !== infoBtn) {
-          popup.remove();
-          document.removeEventListener('click', closePopup);
-        }
-      }
-      setTimeout(function () { document.addEventListener('click', closePopup); }, 0);
+      const rect = menuBtn.getBoundingClientRect();
+      showCardContextMenu(rect.right, rect.bottom, id, div, columnId);
     });
-    div.appendChild(infoBtn);
-
-    // Copy button (copy card-id)
-    const copyBtn = document.createElement('button');
-    copyBtn.className = 'copy-btn';
-    copyBtn.textContent = '\u29c9';
-    copyBtn.title = 'Copy card ID';
-    copyBtn.addEventListener('mousedown', function (e) {
-      e.preventDefault();
-    });
-    copyBtn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      navigator.clipboard.writeText(id).then(function () {
-        const prev = copyBtn.textContent;
-        copyBtn.textContent = '\u2713';
-        setTimeout(function () { copyBtn.textContent = prev; }, 1000);
-      });
-    });
-    div.appendChild(copyBtn);
-
-    // Delete button
-    const delBtn = document.createElement('button');
-    delBtn.className = 'delete-btn';
-    delBtn.textContent = '\u00d7';
-    delBtn.title = 'Delete card';
-    delBtn.addEventListener('mousedown', function (e) {
-      e.preventDefault(); // prevent textarea blur if nearby card is editing
-    });
-    delBtn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      // VSCode webviews block confirm() — use inline confirmation instead
-      delBtn.style.display = 'none';
-      const confirmBar = document.createElement('div');
-      confirmBar.className = 'delete-confirm';
-      const yesBtn = document.createElement('button');
-      yesBtn.className = 'delete-confirm-yes';
-      yesBtn.textContent = 'Delete?';
-      const noBtn = document.createElement('button');
-      noBtn.className = 'delete-confirm-no';
-      noBtn.textContent = '\u00d7';
-      confirmBar.appendChild(yesBtn);
-      confirmBar.appendChild(noBtn);
-      div.appendChild(confirmBar);
-      function dismiss() {
-        confirmBar.remove();
-        delBtn.style.display = '';
-      }
-      yesBtn.addEventListener('click', function (ev) {
-        ev.stopPropagation();
-        vscode.postMessage({ type: 'deleteCard', id: id });
-      });
-      noBtn.addEventListener('click', function (ev) {
-        ev.stopPropagation();
-        dismiss();
-      });
-    });
-    div.appendChild(delBtn);
+    div.appendChild(menuBtn);
 
     // Double-click to enter edit mode
     div.addEventListener('dblclick', function (e) {
-      if (e.target === delBtn || e.target === copyBtn || e.target === infoBtn) return;
+      if (e.target === menuBtn) return;
       editingCardId = id;
       const editEl = renderCardEditMode(id, card, columnId);
       div.replaceWith(editEl);
       const ta = editEl.querySelector('textarea');
       ta.focus();
       ta.setSelectionRange(ta.value.length, ta.value.length);
+    });
+
+    // Right-click context menu
+    div.addEventListener('contextmenu', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      showCardContextMenu(e.clientX, e.clientY, id, div, columnId);
     });
 
     setupDragSource(div, id, columnId);
@@ -421,6 +338,175 @@
     });
 
     return div;
+  }
+
+  // ── Context menu ────────────────────────────────────────────────────────────
+
+  function closeContextMenu() {
+    const existing = document.getElementById('kanban-context-menu');
+    if (existing) existing.remove();
+  }
+
+  function showCardContextMenu(x, y, id, cardEl, columnId) {
+    closeContextMenu();
+
+    const menu = document.createElement('div');
+    menu.id = 'kanban-context-menu';
+    menu.className = 'context-menu';
+
+    function menuItem(label, action, destructive) {
+      const item = document.createElement('button');
+      item.className = 'context-menu-item' + (destructive ? ' context-menu-item--danger' : '');
+      item.textContent = label;
+      item.addEventListener('click', function (e) {
+        e.stopPropagation();
+        closeContextMenu();
+        action();
+      });
+      return item;
+    }
+
+    function divider() {
+      const d = document.createElement('div');
+      d.className = 'context-menu-divider';
+      return d;
+    }
+
+    // View content
+    menu.appendChild(menuItem('View content', function () {
+      const card = state.cards[id];
+      const content = (card && card.content) || '';
+      showContentPopup(id, content);
+    }));
+
+    // Metadata
+    menu.appendChild(menuItem('Metadata', function () {
+      const existing = cardEl.querySelector('.card-metadata-popup');
+      if (existing) { existing.remove(); return; }
+      const meta = (state.cards[id] && state.cards[id].metadata) || {};
+      const popup = document.createElement('div');
+      popup.className = 'card-metadata-popup';
+      function metaRow(label, value) {
+        return '<div><span class="meta-label">' + escHtml(label) + '</span>' + escHtml(value || '\u2014') + '</div>';
+      }
+      const knownKeys = ['created_at', 'active_at', 'done_at', 'branch', 'archived_at'];
+      let rows = metaRow('id:', id) +
+        metaRow('created:', meta.created_at ? new Date(meta.created_at).toLocaleString() : '') +
+        (meta.active_at ? metaRow('active:', new Date(meta.active_at).toLocaleString()) : '') +
+        (meta.done_at ? metaRow('done:', new Date(meta.done_at).toLocaleString()) : '') +
+        (meta.done_at ? metaRow('lead time:', formatDuration(meta.created_at, meta.done_at)) : '') +
+        (meta.active_at && meta.done_at ? metaRow('cycle time:', formatDuration(meta.active_at, meta.done_at)) : '') +
+        metaRow('branch:', meta.branch || '') +
+        (meta.archived_at ? metaRow('archived:', new Date(meta.archived_at).toLocaleString()) : '');
+      Object.keys(meta).forEach(function (key) {
+        if (!knownKeys.includes(key)) {
+          rows += metaRow(key + ':', String(meta[key]));
+        }
+      });
+      popup.innerHTML = rows;
+      cardEl.appendChild(popup);
+      setTimeout(function () {
+        document.addEventListener('click', function closePopup(ev) {
+          if (!popup.contains(ev.target)) {
+            popup.remove();
+            document.removeEventListener('click', closePopup);
+          }
+        });
+      }, 0);
+    }));
+
+    // Copy ID
+    menu.appendChild(menuItem('Copy ID', function () {
+      navigator.clipboard.writeText(id);
+    }));
+
+    menu.appendChild(divider());
+
+    // Delete
+    menu.appendChild(menuItem('Delete', function () {
+      showDeleteConfirm(id, cardEl);
+    }, true));
+
+    document.body.appendChild(menu);
+
+    // Position — keep within viewport
+    const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
+    const mw = menu.offsetWidth || 160;
+    const mh = menu.offsetHeight || 140;
+    menu.style.left = (x + mw > vw ? vw - mw - 4 : x) + 'px';
+    menu.style.top  = (y + mh > vh ? vh - mh - 4 : y) + 'px';
+
+    setTimeout(function () {
+      document.addEventListener('click', closeContextMenu, { once: true });
+      document.addEventListener('contextmenu', closeContextMenu, { once: true });
+    }, 0);
+  }
+
+  function showContentPopup(id, content) {
+    const existing = document.getElementById('kanban-content-modal');
+    if (existing) { existing.remove(); return; }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'kanban-content-modal';
+    overlay.className = 'content-modal-overlay';
+
+    const dialog = document.createElement('div');
+    dialog.className = 'content-modal';
+
+    // Close button
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'content-modal-close';
+    closeBtn.textContent = '\u00d7';
+    closeBtn.title = 'Close (Esc)';
+    closeBtn.addEventListener('click', close);
+    dialog.appendChild(closeBtn);
+
+    // Body
+    const body = document.createElement('div');
+    body.className = 'content-modal-body';
+    body.innerHTML = renderMarkdown(content);
+    dialog.appendChild(body);
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    function close() {
+      overlay.remove();
+      document.removeEventListener('keydown', onKey);
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') close();
+    }
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) close();
+    });
+    document.addEventListener('keydown', onKey);
+  }
+
+  function showDeleteConfirm(id, cardEl) {
+    const existing = cardEl.querySelector('.delete-confirm');
+    if (existing) { existing.remove(); return; }
+    const confirmBar = document.createElement('div');
+    confirmBar.className = 'delete-confirm';
+    const yesBtn = document.createElement('button');
+    yesBtn.className = 'delete-confirm-yes';
+    yesBtn.textContent = 'Delete?';
+    const noBtn = document.createElement('button');
+    noBtn.className = 'delete-confirm-no';
+    noBtn.textContent = '\u00d7';
+    confirmBar.appendChild(yesBtn);
+    confirmBar.appendChild(noBtn);
+    cardEl.appendChild(confirmBar);
+    function dismiss() { confirmBar.remove(); }
+    yesBtn.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      vscode.postMessage({ type: 'deleteCard', id: id });
+    });
+    noBtn.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      dismiss();
+    });
   }
 
   // ── Drag and drop ───────────────────────────────────────────────────────────
@@ -576,6 +662,125 @@
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  function inlineMd(text) {
+    // Escape HTML first so user text can't inject tags
+    text = escHtml(text);
+    // Extract inline code to protect it from further replacements
+    var codes = [];
+    text = text.replace(/`([^`]+)`/g, function (_, c) {
+      codes.push(c);
+      return '\x00IC' + (codes.length - 1) + '\x00';
+    });
+    // Bold + italic
+    text = text.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    // Bold
+    text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/__(.+?)__/g, '<strong>$1</strong>');
+    // Italic
+    text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    text = text.replace(/_(.+?)_/g, '<em>$1</em>');
+    // Strikethrough
+    text = text.replace(/~~(.+?)~~/g, '<del>$1</del>');
+    // Links — show label only (no real href in webview)
+    text = text.replace(/\[([^\]]+)\]\([^)]*\)/g, '<span class="md-link">$1</span>');
+    // Restore inline code
+    text = text.replace(/\x00IC(\d+)\x00/g, function (_, i) {
+      return '<code class="md-code">' + codes[+i] + '</code>';
+    });
+    return text;
+  }
+
+  function renderMarkdown(md) {
+    if (!md) return '<em class="md-empty">(empty)</em>';
+
+    // 1. Extract fenced code blocks first
+    var codeBlocks = [];
+    var src = md.replace(/```([^\n]*)\n([\s\S]*?)```/g, function (_, lang, code) {
+      codeBlocks.push('<pre class="md-pre"><code>' + escHtml(code) + '</code></pre>');
+      return '\x00CB' + (codeBlocks.length - 1) + '\x00';
+    });
+
+    // 2. Process line by line
+    var lines = src.split('\n');
+    var out = [];
+    var listType = null;
+
+    function closeList() {
+      if (listType === 'ul') { out.push('</ul>'); }
+      if (listType === 'ol') { out.push('</ol>'); }
+      listType = null;
+    }
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+
+      // Code block placeholder — pass through as-is
+      if (/^\x00CB\d+\x00$/.test(line.trim())) {
+        closeList();
+        out.push(line.trim());
+        continue;
+      }
+
+      // Heading
+      var hm = line.match(/^(#{1,6})\s+(.*)/);
+      if (hm) {
+        closeList();
+        var lvl = hm[1].length;
+        out.push('<h' + lvl + ' class="md-h">' + inlineMd(hm[2]) + '</h' + lvl + '>');
+        continue;
+      }
+
+      // Horizontal rule
+      if (/^([-*_])\1{2,}\s*$/.test(line)) {
+        closeList();
+        out.push('<hr class="md-hr">');
+        continue;
+      }
+
+      // Blockquote
+      if (line.startsWith('> ')) {
+        closeList();
+        out.push('<blockquote class="md-bq">' + inlineMd(line.slice(2)) + '</blockquote>');
+        continue;
+      }
+
+      // Unordered list
+      var ulm = line.match(/^[-*+]\s+(.*)/);
+      if (ulm) {
+        if (listType !== 'ul') { closeList(); out.push('<ul class="md-ul">'); listType = 'ul'; }
+        out.push('<li>' + inlineMd(ulm[1]) + '</li>');
+        continue;
+      }
+
+      // Ordered list
+      var olm = line.match(/^\d+[.)]\s+(.*)/);
+      if (olm) {
+        if (listType !== 'ol') { closeList(); out.push('<ol class="md-ol">'); listType = 'ol'; }
+        out.push('<li>' + inlineMd(olm[1]) + '</li>');
+        continue;
+      }
+
+      // Blank line
+      if (!line.trim()) {
+        closeList();
+        continue;
+      }
+
+      // Paragraph
+      closeList();
+      out.push('<p class="md-p">' + inlineMd(line) + '</p>');
+    }
+
+    closeList();
+
+    // 3. Restore code blocks
+    var html = out.join('');
+    codeBlocks.forEach(function (block, idx) {
+      html = html.replace('\x00CB' + idx + '\x00', block);
+    });
+    return html;
   }
 
 }());

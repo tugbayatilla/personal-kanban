@@ -81,7 +81,7 @@ body {
   background: var(--vscode-editor-background);
   border: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.3));
   border-radius: 6px;
-  padding: 10px 30px 10px 10px;
+  padding: 10px;
   cursor: default;
   user-select: none;
   flex-shrink: 0;
@@ -89,12 +89,6 @@ body {
 
 .card:hover {
   border-color: var(--vscode-focusBorder, #007acc);
-}
-
-.card:hover .delete-btn,
-.card:hover .copy-btn,
-.card:hover .info-btn {
-  opacity: 1;
 }
 
 .card.dragging {
@@ -152,16 +146,15 @@ body {
   padding: 1px 5px;
 }
 
-.delete-btn,
-.copy-btn,
-.info-btn {
+.card-menu-btn {
   position: absolute;
   top: 4px;
+  right: 4px;
   width: 20px;
   height: 20px;
   border: none;
   background: none;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 20px;
   text-align: center;
   cursor: pointer;
@@ -169,26 +162,54 @@ body {
   transition: opacity 0.1s;
   border-radius: 3px;
   padding: 0;
+  color: var(--vscode-foreground, #cccccc);
 }
 
-.delete-btn {
-  right: 4px;
-  font-size: 18px;
+.card:hover .card-menu-btn,
+.card-menu-btn:focus {
+  opacity: 1;
+}
+
+.card-menu-btn:hover {
+  background: var(--vscode-list-hoverBackground, rgba(128,128,128,0.15));
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 1000;
+  background: var(--vscode-menu-background, var(--vscode-editorHoverWidget-background, #252526));
+  border: 1px solid var(--vscode-menu-border, var(--vscode-editorHoverWidget-border, #454545));
+  border-radius: 4px;
+  padding: 4px 0;
+  min-width: 150px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+}
+
+.context-menu-item {
+  display: block;
+  width: 100%;
+  padding: 6px 14px;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--vscode-menu-foreground, var(--vscode-foreground));
+  font-size: 12px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.context-menu-item:hover {
+  background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground, rgba(128,128,128,0.15)));
+}
+
+.context-menu-item--danger {
   color: var(--vscode-errorForeground, #cc3333);
 }
 
-.copy-btn {
-  right: 28px;
-  color: var(--vscode-foreground, #cccccc);
-}
-
-.info-btn {
-  right: 52px;
-  color: var(--vscode-foreground, #cccccc);
-}
-
-.delete-btn:hover {
-  background: var(--vscode-inputValidation-errorBackground, rgba(200,0,0,0.1));
+.context-menu-divider {
+  height: 1px;
+  background: var(--vscode-menu-separatorBackground, var(--vscode-widget-border, rgba(128,128,128,0.3)));
+  margin: 4px 0;
 }
 
 .delete-confirm {
@@ -228,9 +249,134 @@ body {
   background: var(--vscode-button-secondaryHoverBackground, rgba(128,128,128,0.3));
 }
 
-.copy-btn:hover,
-.info-btn:hover {
-  background: var(--vscode-list-hoverBackground, rgba(128,128,128,0.1));
+
+.content-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.content-modal {
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-editorHoverWidget-border, #454545);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  width: 100%;
+  max-width: 640px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.content-modal-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  font-size: 20px;
+  line-height: 24px;
+  text-align: center;
+  cursor: pointer;
+  color: var(--vscode-foreground);
+  border-radius: 4px;
+  padding: 0;
+  opacity: 0.5;
+  z-index: 1;
+}
+
+.content-modal-close:hover {
+  opacity: 1;
+  background: var(--vscode-list-hoverBackground, rgba(128,128,128,0.15));
+}
+
+.content-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.content-modal-body .md-h {
+  margin: 0 0 10px;
+  line-height: 1.3;
+  color: var(--vscode-foreground);
+}
+.content-modal-body h1.md-h { font-size: 20px; border-bottom: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.3)); padding-bottom: 6px; }
+.content-modal-body h2.md-h { font-size: 17px; }
+.content-modal-body h3.md-h { font-size: 15px; }
+.content-modal-body h4.md-h,
+.content-modal-body h5.md-h,
+.content-modal-body h6.md-h { font-size: 13px; }
+
+.content-modal-body .md-p {
+  margin: 0 0 10px;
+  line-height: 1.6;
+  color: var(--vscode-foreground);
+}
+
+.content-modal-body .md-ul,
+.content-modal-body .md-ol {
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+
+.content-modal-body li {
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+
+.content-modal-body .md-bq {
+  margin: 0 0 10px;
+  padding: 4px 12px;
+  border-left: 3px solid var(--vscode-focusBorder, #007acc);
+  color: var(--vscode-descriptionForeground, rgba(128,128,128,0.9));
+  font-style: italic;
+}
+
+.content-modal-body .md-hr {
+  border: none;
+  border-top: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.3));
+  margin: 12px 0;
+}
+
+.content-modal-body .md-pre {
+  background: var(--vscode-textCodeBlock-background, rgba(128,128,128,0.1));
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin: 0 0 10px;
+  overflow-x: auto;
+}
+
+.content-modal-body .md-pre code {
+  font-family: var(--vscode-editor-font-family, 'Menlo', 'Monaco', monospace);
+  font-size: 12px;
+  white-space: pre;
+  background: none;
+  padding: 0;
+}
+
+.content-modal-body .md-code {
+  font-family: var(--vscode-editor-font-family, 'Menlo', 'Monaco', monospace);
+  font-size: 12px;
+  background: var(--vscode-textCodeBlock-background, rgba(128,128,128,0.15));
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+
+.content-modal-body .md-link {
+  color: var(--vscode-textLink-foreground, #4daafc);
+}
+
+.content-modal-body .md-empty {
+  color: var(--vscode-descriptionForeground, rgba(128,128,128,0.7));
 }
 
 .card-metadata-popup {
