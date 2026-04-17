@@ -30,7 +30,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { resetMockConfig, setMockConfig } from './__mocks__/vscode';
+import { resetMockConfig, setMockConfig, window as mockWindow } from './__mocks__/vscode';
 import { readCard, writeCard } from '../io';
 import { initLogger } from '../hooks';
 import { Card, WebviewMessage } from '../types';
@@ -59,10 +59,35 @@ function writeMinimalManifest(boardRoot: string, wipLimit: number | null = null)
     version: 1,
     name: 'Test Board',
     columns: [
-      { id: 'backlog',      label: 'Backlog',      index: 0, wip_limit: null,     policies: {} },
-      { id: 'in-progress',  label: 'In Progress',  index: 1, wip_limit: wipLimit, policies: {} },
-      { id: 'done',         label: 'Done',          index: 2, wip_limit: null,     policies: {} },
+      { id: 'backlog',      label: 'Backlog',      index: 0, wip_limit: null,     policies: [] },
+      { id: 'in-progress',  label: 'In Progress',  index: 1, wip_limit: wipLimit, policies: [] },
+      { id: 'done',         label: 'Done',          index: 2, wip_limit: null,     policies: [] },
     ],
+    scripts: {},
+    hooks: {},
+  };
+  fs.mkdirSync(boardRoot, { recursive: true });
+  fs.writeFileSync(path.join(boardRoot, 'manifest.json'), JSON.stringify(manifest, null, 2));
+}
+
+/** Writes a manifest where moving to 'done' requires policy script approval. */
+function writeManifestWithPolicyScript(boardRoot: string, scriptFile: string): void {
+  const manifest = {
+    version: 1,
+    name: 'Test Board',
+    columns: [
+      { id: 'backlog',     label: 'Backlog',     index: 0, wip_limit: null, policies: [] },
+      { id: 'in-progress', label: 'In Progress', index: 1, wip_limit: null, policies: [] },
+      { id: 'done',        label: 'Done',        index: 2, wip_limit: null, policies: ['entry:done'] },
+    ],
+    policies: {
+      'entry:done': {
+        description: 'Acceptance required.',
+        message: 'Card has not been accepted.',
+        script: scriptFile,
+      },
+    },
+    board_policies: [],
     scripts: {},
     hooks: {},
   };
@@ -365,6 +390,211 @@ describe('BoardPanel message handler', () => {
 
       const after = fs.readFileSync(path.join(boardRoot, 'manifest.json'), 'utf-8');
       expect(after).toBe(before);
+    });
+  });
+
+  // ── policy approval ────────────────────────────────────────────────────────
+
+  describe('moveCard — policy approval', () => {
+    const SCRIPTS_DIR = 'scripts';
+
+    beforeEach(() => {
+      fs.mkdirSync(path.join(boardRoot, SCRIPTS_DIR), { recursive: true });
+      // Write a minimal lib.js so policy scripts can require('./lib').
+      const lib = `
+        'use strict';
+        function readPayload(_name, cb) {
+          let raw = '';
+          process.stdin.setEncoding('utf8');
+          process.stdin.on('data', c => { raw += c; });
+          process.stdin.on('end', () => { cb(JSON.parse(raw)); });
+        }
+        module.exports = { readPayload };
+      `;
+      fs.writeFileSync(path.join(boardRoot, SCRIPTS_DIR, 'lib.js'), lib);
+      mockWindow.showWarningMessage.mockReset();
+    });
+
+    /**
+     * @spec PANEL-007
+     * @contract When a policy script exits 0, the move must proceed without
+     *   showing any approval dialog.
+     */
+    it('proceeds without dialog when policy script exits 0', async () => {
+      const script = `
+        const { readPayload } = require('./lib');
+        readPayload('p', () => { process.exit(0); });
+      `;
+      fs.writeFileSync(path.join(boardRoot, SCRIPTS_DIR, 'policy-ok.js'), script);
+      writeManifestWithPolicyScript(boardRoot, `${SCRIPTS_DIR}/policy-ok.js`);
+      writeCard(boardRoot, makeCard('card-1', { column: 'in-progress', order: '0.5' }));
+
+      await callHandler(workspaceRoot, {
+        type: 'moveCard', id: 'card-1',
+        fromColumn: 'in-progress', toColumn: 'done', toIndex: 0,
+      });
+
+      expect(mockWindow.showWarningMessage).not.toHaveBeenCalled();
+      expect(readCard(boardRoot, 'card-1')!.metadata.column).toBe('done');
+    });
+
+    /**
+     * @spec PANEL-008
+     * @contract When a policy script exits 1 and the user clicks Continue Anyway,
+     *   the move must be committed.
+     */
+    it('commits move when policy script exits 1 and user approves', async () => {
+      const script = `
+        const { readPayload } = require('./lib');
+        readPayload('p', () => { process.exit(1); });
+      `;
+      fs.writeFileSync(path.join(boardRoot, SCRIPTS_DIR, 'policy-violated.js'), script);
+      writeManifestWithPolicyScript(boardRoot, `${SCRIPTS_DIR}/policy-violated.js`);
+      writeCard(boardRoot, makeCard('card-1', { column: 'in-progress', order: '0.5' }));
+
+      mockWindow.showWarningMessage.mockResolvedValue('Continue Anyway');
+
+      await callHandler(workspaceRoot, {
+        type: 'moveCard', id: 'card-1',
+        fromColumn: 'in-progress', toColumn: 'done', toIndex: 0,
+      });
+
+      expect(mockWindow.showWarningMessage).toHaveBeenCalledTimes(1);
+      expect(readCard(boardRoot, 'card-1')!.metadata.column).toBe('done');
+    });
+
+    /**
+     * @spec PANEL-009
+     * @contract When a policy script exits 1 and the user cancels, the move must
+     *   be aborted and the card must remain in its original column.
+     */
+    it('aborts move when policy script exits 1 and user cancels', async () => {
+      const script = `
+        const { readPayload } = require('./lib');
+        readPayload('p', () => { process.exit(1); });
+      `;
+      fs.writeFileSync(path.join(boardRoot, SCRIPTS_DIR, 'policy-violated.js'), script);
+      writeManifestWithPolicyScript(boardRoot, `${SCRIPTS_DIR}/policy-violated.js`);
+      writeCard(boardRoot, makeCard('card-1', { column: 'in-progress', order: '0.5' }));
+
+      mockWindow.showWarningMessage.mockResolvedValue(undefined);
+
+      await callHandler(workspaceRoot, {
+        type: 'moveCard', id: 'card-1',
+        fromColumn: 'in-progress', toColumn: 'done', toIndex: 0,
+      });
+
+      expect(mockWindow.showWarningMessage).toHaveBeenCalledTimes(1);
+      expect(readCard(boardRoot, 'card-1')!.metadata.column).toBe('in-progress');
+    });
+
+    /**
+     * @spec PANEL-010
+     * @contract The approval dialog must display the policy message from the manifest.
+     */
+    it('shows the policy message in the approval dialog', async () => {
+      const script = `
+        const { readPayload } = require('./lib');
+        readPayload('p', () => { process.exit(1); });
+      `;
+      fs.writeFileSync(path.join(boardRoot, SCRIPTS_DIR, 'policy-violated.js'), script);
+      writeManifestWithPolicyScript(boardRoot, `${SCRIPTS_DIR}/policy-violated.js`);
+      writeCard(boardRoot, makeCard('card-1', { column: 'in-progress', order: '0.5' }));
+
+      mockWindow.showWarningMessage.mockResolvedValue(undefined);
+
+      await callHandler(workspaceRoot, {
+        type: 'moveCard', id: 'card-1',
+        fromColumn: 'in-progress', toColumn: 'done', toIndex: 0,
+      });
+
+      expect(mockWindow.showWarningMessage).toHaveBeenCalledWith(
+        'Card has not been accepted.',
+        { modal: true },
+        'Continue Anyway'
+      );
+    });
+
+    /**
+     * @spec PANEL-011
+     * @contract A card tagged with a bypass tag must skip all policy checks.
+     *   No dialog must be shown and the move must proceed.
+     */
+    it('skips all policy checks when card has a bypass tag', async () => {
+      const violated = `
+        const { readPayload } = require('./lib');
+        readPayload('p', () => { process.exit(1); });
+      `;
+      fs.writeFileSync(path.join(boardRoot, SCRIPTS_DIR, 'policy-violated.js'), violated);
+
+      const manifest = {
+        version: 1, name: 'Test Board',
+        columns: [
+          { id: 'backlog',     label: 'Backlog',     index: 0, wip_limit: null, policies: [] },
+          { id: 'in-progress', label: 'In Progress', index: 1, wip_limit: null, policies: [] },
+          { id: 'done',        label: 'Done',        index: 2, wip_limit: null, policies: ['entry:done'] },
+        ],
+        policies: {
+          'entry:done': { description: '', message: 'Needs acceptance.', script: `${SCRIPTS_DIR}/policy-violated.js` },
+        },
+        board_policies: [],
+        policy_bypass_tags: ['expedite'],
+        scripts: {}, hooks: {},
+      };
+      fs.writeFileSync(path.join(boardRoot, 'manifest.json'), JSON.stringify(manifest));
+
+      // Card with #expedite tag — should bypass the policy entirely.
+      const card = makeCard('card-1', { column: 'in-progress', order: '0.5' });
+      card.content = '# Task\n\n#expedite\n\nSome content.';
+      writeCard(boardRoot, card);
+
+      await callHandler(workspaceRoot, {
+        type: 'moveCard', id: 'card-1',
+        fromColumn: 'in-progress', toColumn: 'done', toIndex: 0,
+      });
+
+      expect(mockWindow.showWarningMessage).not.toHaveBeenCalled();
+      expect(readCard(boardRoot, 'card-1')!.metadata.column).toBe('done');
+    });
+
+    /**
+     * @spec PANEL-013
+     * @contract With multiple policy violations, dialogs appear in order.
+     *   Cancelling the first must abort the move without showing the second dialog.
+     */
+    it('stops at first cancellation without showing subsequent dialogs', async () => {
+      const violated = `
+        const { readPayload } = require('./lib');
+        readPayload('p', () => { process.exit(1); });
+      `;
+      fs.writeFileSync(path.join(boardRoot, SCRIPTS_DIR, 'p1.js'), violated);
+      fs.writeFileSync(path.join(boardRoot, SCRIPTS_DIR, 'p2.js'), violated);
+
+      const manifest = {
+        version: 1, name: 'Test Board',
+        columns: [
+          { id: 'backlog',     label: 'Backlog',     index: 0, wip_limit: null, policies: [] },
+          { id: 'in-progress', label: 'In Progress', index: 1, wip_limit: null, policies: [] },
+          { id: 'done',        label: 'Done',        index: 2, wip_limit: null, policies: ['p1', 'p2'] },
+        ],
+        policies: {
+          'p1': { description: '', message: 'First policy.',  script: `${SCRIPTS_DIR}/p1.js` },
+          'p2': { description: '', message: 'Second policy.', script: `${SCRIPTS_DIR}/p2.js` },
+        },
+        board_policies: [], scripts: {}, hooks: {},
+      };
+      fs.writeFileSync(path.join(boardRoot, 'manifest.json'), JSON.stringify(manifest));
+      writeCard(boardRoot, makeCard('card-1', { column: 'in-progress', order: '0.5' }));
+
+      mockWindow.showWarningMessage.mockResolvedValue(undefined);
+
+      await callHandler(workspaceRoot, {
+        type: 'moveCard', id: 'card-1',
+        fromColumn: 'in-progress', toColumn: 'done', toIndex: 0,
+      });
+
+      expect(mockWindow.showWarningMessage).toHaveBeenCalledTimes(1);
+      expect(readCard(boardRoot, 'card-1')!.metadata.column).toBe('in-progress');
     });
   });
 

@@ -28,7 +28,7 @@ WIP (Work In Progress) limits are the core control mechanism of Kanban. They mak
 
 - **In Progress:** limit 2 (recommended). Start new work only when a slot is free.
 - **Review:** limit 3. If Review is full, help unblock items there before starting anything new.
-- Limits are enforced via `wip.violated` hook → `scripts/wip-alert.js`.
+- Limits are enforced via the `wip-limit` board policy → `scripts/policy-wip-limit.js`.
 
 **When a WIP limit is hit, stop starting. Start finishing.**
 
@@ -40,20 +40,28 @@ Policies make implicit agreements explicit. They remove ambiguity about how card
 
 ### Defining Policies
 
-Policies are defined in the `policies` registry in `manifest.json`. Each entry has a `description` (for readers of the manifest) and a `message` (shown in notifications when the policy is violated):
+Policies are defined in the `policies` registry in `manifest.json`. Each entry has a `description` (for readers), a `message` (shown in the approval dialog), and an optional `script` path:
 
 ```json
 "policies": {
   "no-pullback": {
     "description": "Cards must not move backward in the value stream.",
-    "message": "Moving a card backward is a policy violation. Add a note instead."
+    "message": "Moving a card backward is a policy violation. Add a note instead.",
+    "script": "scripts/policy-no-pullback.js"
   },
   "entry:review": {
     "description": "All acceptance criteria must be met before entering Review.",
-    "message": "Card is not ready for Review — all acceptance criteria must be met first."
+    "message": "Card is not ready for Review — all acceptance criteria must be met first.",
+    "script": "scripts/policy-entry-review.js"
   }
 }
 ```
+
+The `script` is a Node.js script that receives the move payload as JSON on stdin and exits:
+- **`0`** — policy is satisfied, move proceeds silently.
+- **non-zero** — policy is violated. A VS Code approval dialog shows the `message`. The user must click **Continue Anyway** to proceed, or cancel to abort the move.
+
+Policies without a `script` are documentation only — they have no runtime effect.
 
 ### Applying Policies
 
@@ -71,12 +79,39 @@ Once defined, reference policies by key in two places:
 
 To add a policy: add it to the `policies` registry, then reference its key in `board_policies` or the relevant column. To remove a policy: remove its key from wherever it is referenced (the definition in `policies` can stay as documentation).
 
-### Built-in Policy Keys
+### Policy Scripts
 
-| Key | Behaviour |
-|-----|-----------|
-| `no-pullback` | Fires when a card moves backward in the column order |
-| any other key | Fires when a card enters the column that references it |
+Policy scripts receive this payload on stdin:
+
+```json
+{
+  "event": "card.moving",
+  "card_id": "...",
+  "card_title": "...",
+  "from_column": "...",
+  "to_column": "...",
+  "to_column_card_count": 2,
+  "to_column_wip_limit": 3,
+  "columns": ["backlog", "refined", "in-progress", "review", "done"],
+  "policy": "no-pullback"
+}
+```
+
+The `columns` array gives scripts the full column order so they can determine move direction without reading the manifest. Use `readPayload` from `lib.js` to parse the payload.
+
+### Bypassing Policies
+
+Some cards legitimately need to skip all policy checks — urgent fixes, escalations, or expedited work. Add a bypass tag to the card to suppress all policy dialogs for that move.
+
+Bypass tags are configured in `manifest.json`:
+
+```json
+"policy_bypass_tags": ["no-policy", "expedite"]
+```
+
+Any card tagged with `#no-policy` or `#expedite` will move freely without triggering any policy script. To add more bypass tags, append them to the array. To disable bypassing entirely, set the array to `[]`.
+
+Use bypass tags sparingly. Frequent use signals that a policy is too strict or poorly defined.
 
 ### Blocked Cards
 
@@ -131,6 +166,8 @@ Tags describe the nature of the work. Use one primary tag per card.
 | `spike` | Time-boxed research or exploration. Output is knowledge, not code. |
 | `urgent` | Must be resolved before other work. Use sparingly — overuse dilutes the signal. |
 | `blocked` | Work cannot proceed. Requires a note explaining the blocker. |
+| `expedite` | Bypasses all policy checks on move. Reserved for urgent escalations. |
+| `no-policy` | Bypasses all policy checks on move. Use for exceptions that don't fit normal flow. |
 
 ---
 
@@ -140,17 +177,14 @@ Scripts in `scripts/` fire automatically in response to board events. They are f
 
 | Hook event | Script | Fires when |
 |------------|--------|------------|
-| `policy.violated` | `policy-violation.js` | A card move violates a board or column policy |
-| `wip.violated` | `wip-alert.js` | A WIP limit is exceeded |
+| `policy.overridden` | `policy-overridden.js` | A policy was violated, user approved, move proceeded |
 | `card.created` | `card-created.js` | A new card is created |
-| `card.moved` | `card-moved.js` | A card changes column |
-| `card.moved` | `card-reviewed.js` | A card enters Review |
-| `card.moved` | `card-done.js` | A card enters Done |
+| `card.moved` | `card-moved.js` | A card changes column (handles Review and Done notifications too) |
 | `card.edited` | `card-edited.js` | A card's content changes |
 | `card.deleted` | `card-deleted.js` | A card is deleted |
 | `cards.archived` | `cards-archived.js` | Done cards are archived |
 
-The `policy.violated` payload includes `policy` (the key from the registry) and `message` (the human-readable explanation), so scripts know exactly which policy was violated.
+The `policy.overridden` payload includes `policy` (the key from the registry) and `message` (the human-readable explanation).
 
 Scripts receive a JSON payload via stdin. Shared helpers are in `scripts/lib.js`.
 

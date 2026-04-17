@@ -57,40 +57,45 @@ function initBoard(context: vscode.ExtensionContext): void {
         { id: 'done',        label: 'Done',          index: 4, wip_limit: null, policies: ['entry:done'] },
       ],
       policies: {
+        'wip-limit': {
+          description: 'The WIP limit of the destination column must not be exceeded.',
+          message: 'Moving this card would exceed the WIP limit. Stop starting, start finishing.',
+          script: 'scripts/policy-wip-limit.js',
+        },
         'no-pullback': {
           description: 'Cards must not move backward in the value stream. If rework is needed, add a note to the card explaining why.',
           message: 'Moving a card backward is a policy violation. Add a note to the card explaining why instead.',
+          script: 'scripts/policy-no-pullback.js',
         },
         'entry:review': {
           description: 'All acceptance criteria must be met from the worker\'s perspective before a card may enter Review.',
           message: 'Card is not ready for Review — all acceptance criteria must be met first.',
+          script: 'scripts/policy-entry-review.js',
         },
         'entry:done': {
           description: 'A card may only enter Done after a second person (or the same person after a pause) has verified the outcome.',
           message: 'Card has not been verified — Done requires independent acceptance.',
+          script: 'scripts/policy-entry-done.js',
         },
       },
-      board_policies: ['no-pullback'],
+      board_policies: ['wip-limit', 'no-pullback'],
+      policy_bypass_tags: [],
       tags: {},
       scripts: {
-        'policy-violation': { file: 'scripts/policy-violation.js' },
-        'wip-alert':        { file: 'scripts/wip-alert.js' },
-        'card-created':     { file: 'scripts/card-created.js' },
-        'card-edited':      { file: 'scripts/card-edited.js' },
-        'card-deleted':     { file: 'scripts/card-deleted.js' },
-        'card-moved':       { file: 'scripts/card-moved.js' },
-        'card-reviewed':    { file: 'scripts/card-reviewed.js' },
-        'card-done':        { file: 'scripts/card-done.js' },
-        'cards-archived':   { file: 'scripts/cards-archived.js' },
+        'policy-overridden': { file: 'scripts/policy-overridden.js' },
+        'card-created':      { file: 'scripts/card-created.js' },
+        'card-edited':       { file: 'scripts/card-edited.js' },
+        'card-deleted':      { file: 'scripts/card-deleted.js' },
+        'card-moved':        { file: 'scripts/card-moved.js' },
+        'cards-archived':    { file: 'scripts/cards-archived.js' },
       },
       hooks: {
-        'policy.violated': ['policy-violation'],
-        'wip.violated':    ['wip-alert'],
-        'card.created':    ['card-created'],
-        'card.edited':     ['card-edited'],
-        'card.deleted':    ['card-deleted'],
-        'card.moved':      ['card-moved', 'card-reviewed', 'card-done'],
-        'cards.archived':  ['cards-archived'],
+        'policy.overridden': ['policy-overridden'],
+        'card.created':      ['card-created'],
+        'card.edited':       ['card-edited'],
+        'card.deleted':      ['card-deleted'],
+        'card.moved':        ['card-moved'],
+        'cards.archived':    ['cards-archived'],
       },
       tagColorTarget: 'tag',
     };
@@ -100,15 +105,17 @@ function initBoard(context: vscode.ExtensionContext): void {
   const writeIfMissing = (filePath: string, content: string) => {
     if (!fs.existsSync(filePath)) fs.writeFileSync(filePath, content);
   };
-  writeIfMissing(path.join(boardRoot, 'scripts', 'lib.js'),               SCRIPT_LIB);
-  writeIfMissing(path.join(boardRoot, 'scripts', 'card-reviewed.js'),     SCRIPT_CARD_REVIEWED);
-  writeIfMissing(path.join(boardRoot, 'scripts', 'wip-alert.js'),         SCRIPT_WIP_ALERT);
-  writeIfMissing(path.join(boardRoot, 'scripts', 'card-created.js'),      SCRIPT_CARD_CREATED);
-  writeIfMissing(path.join(boardRoot, 'scripts', 'card-edited.js'),       SCRIPT_CARD_EDITED);
-  writeIfMissing(path.join(boardRoot, 'scripts', 'card-deleted.js'),      SCRIPT_CARD_DELETED);
-  writeIfMissing(path.join(boardRoot, 'scripts', 'card-moved.js'),        SCRIPT_CARD_MOVED);
-  writeIfMissing(path.join(boardRoot, 'scripts', 'cards-archived.js'),    SCRIPT_CARDS_ARCHIVED);
-  writeIfMissing(path.join(boardRoot, 'scripts', 'policy-violation.js'),  SCRIPT_POLICY_VIOLATION);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'lib.js'),                 SCRIPT_LIB);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'card-created.js'),        SCRIPT_CARD_CREATED);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'card-edited.js'),         SCRIPT_CARD_EDITED);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'card-deleted.js'),        SCRIPT_CARD_DELETED);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'card-moved.js'),          SCRIPT_CARD_MOVED);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'cards-archived.js'),      SCRIPT_CARDS_ARCHIVED);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'policy-overridden.js'),   SCRIPT_POLICY_OVERRIDDEN);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'policy-wip-limit.js'),    SCRIPT_POLICY_WIP_LIMIT);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'policy-no-pullback.js'),  SCRIPT_POLICY_NO_PULLBACK);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'policy-entry-review.js'), SCRIPT_POLICY_ENTRY_REVIEW);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'policy-entry-done.js'),   SCRIPT_POLICY_ENTRY_DONE);
 
   const guidelinesTemplate = path.join(context.extensionPath, 'resources', 'GUIDELINES.md');
   fs.writeFileSync(path.join(boardRoot, 'GUIDELINES.md'), fs.readFileSync(guidelinesTemplate, 'utf8'));
@@ -237,69 +244,34 @@ module.exports = { readPayload, notify, readCard, writeCard, updateCardMetadata 
 // and any additional logic (git operations, logging, webhooks, etc.).
 const SCRIPT_CARD_MOVED = `#!/usr/bin/env node
 // Fires whenever a card moves between columns.
-// Writes the updated \`column\` field to the card file and fires a notification.
+// Handles notifications for all column transitions including Review and Done.
 //
 // Hook event: card.moved
 // Payload: { event, timestamp, card_id, card_title, from_column, to_column, branch, card_path }
-//
-// Note: the extension already wrote \`column\` and \`order\` to the card synchronously.
-// Calling updateCardMetadata here is safe (idempotent) and demonstrates how scripts
-// can modify card metadata for custom workflows.
-
-'use strict';
-
-const path = require('path');
-const { readPayload, notify, updateCardMetadata } = require('./lib');
-
-readPayload('card-moved', ({ card_id, card_title, from_column, to_column, branch, card_path, notifications }) => {
-  // Optionally re-write column (already done by the extension; shown here as an example).
-  // if (card_path) {
-  //   updateCardMetadata(card_path, { column: to_column });
-  // }
-
-  const message = (to_column === 'done' && branch)
-    ? \`"\${card_title}" moved to Done — branch: \${branch}\`
-    : \`"\${card_title}" moved to \${to_column}\`;
-
-  if (notifications !== false) notify('Kanban: Card Moved', message);
-  process.stdout.write(message + '\\n');
-});
-`;
-
-const SCRIPT_CARD_REVIEWED = `#!/usr/bin/env node
-// Fires a system notification when a card moves to Review.
-//
-// Hook event: card.reviewed
-// Payload: { event, timestamp, card_id, card_title, from_column, branch }
 
 'use strict';
 
 const { readPayload, notify } = require('./lib');
 
-readPayload('card-reviewed', ({ card_title, branch, notifications }) => {
-  const message = branch
-    ? \`"\${card_title}" is ready for review — branch: \${branch}\`
-    : \`"\${card_title}" is ready for review\`;
+readPayload('card-moved', ({ card_title, from_column, to_column, branch, notifications }) => {
+  let title = 'Kanban: Card Moved';
+  let message;
 
-  if (notifications !== false) notify('Kanban: Ready for Review', message);
-  process.stdout.write(message + '\\n');
-});
-`;
+  if (to_column === 'review') {
+    title = 'Kanban: Ready for Review';
+    message = branch
+      ? \`"\${card_title}" is ready for review — branch: \${branch}\`
+      : \`"\${card_title}" is ready for review\`;
+  } else if (to_column === 'done') {
+    title = 'Kanban: Card Done';
+    message = branch
+      ? \`"\${card_title}" moved to Done — branch: \${branch}\`
+      : \`"\${card_title}" moved to Done\`;
+  } else {
+    message = \`"\${card_title}" moved from \${from_column} to \${to_column}\`;
+  }
 
-const SCRIPT_WIP_ALERT = `#!/usr/bin/env node
-// Fires a system notification when a WIP limit is exceeded.
-//
-// Hook event: wip.violated
-// Payload: { event, timestamp, column, wip_limit, current_count, card_id }
-
-'use strict';
-
-const { readPayload, notify } = require('./lib');
-
-readPayload('wip-alert', ({ column, wip_limit, current_count, notifications }) => {
-  const message = \`WIP limit exceeded in "\${column}": \${current_count} cards (limit: \${wip_limit})\`;
-
-  if (notifications !== false) notify('Kanban WIP Alert', message);
+  if (notifications !== false) notify(title, message);
   process.stdout.write(message + '\\n');
 });
 `;
@@ -371,26 +343,98 @@ readPayload('cards-archived', ({ column }) => {
 });
 `;
 
-const SCRIPT_POLICY_VIOLATION = `#!/usr/bin/env node
-// Fires when a card move violates a board policy.
+const SCRIPT_POLICY_OVERRIDDEN = `#!/usr/bin/env node
+// Fires after a user approves a policy violation and the card move proceeds.
 //
-// Hook event: policy.violated
+// Hook event: policy.overridden
 // Payload: { event, timestamp, card_id, card_title, from_column, to_column, policy, message }
-//
-// policy values:
-//   "no-pullback"  — card moved backward in the value stream
-//   "entry:review" — card entered Review without meeting entry criteria
-//   "entry:done"   — card entered Done without meeting entry criteria
 
 'use strict';
 
 const { readPayload, notify } = require('./lib');
 
-readPayload('policy-violation', ({ card_title, from_column, to_column, policy, message, notifications }) => {
-  const title = 'Kanban: Policy Violation';
-  const summary = \`[\${policy}] "\${card_title}" moved from \${from_column} → \${to_column}\`;
+readPayload('policy-overridden', ({ card_title, from_column, to_column, policy, notifications }) => {
+  const message = \`[\${policy}] "\${card_title}" moved \${from_column} → \${to_column} (policy overridden)\`;
 
-  process.stderr.write(\`\${summary}\\n\${message}\\n\`);
-  if (notifications !== false) notify(title, \`\${summary}\\n\${message}\`);
+  process.stdout.write(message + '\\n');
+  if (notifications !== false) notify('Kanban: Policy Overridden', message);
+});
+`;
+
+const SCRIPT_POLICY_WIP_LIMIT = `#!/usr/bin/env node
+// Policy script: wip-limit
+// Exits 1 (violated) if moving this card would exceed the destination column's WIP limit.
+// Exits 0 (ok) if no WIP limit is set or the limit is not exceeded.
+//
+// Payload: { to_column, to_column_card_count, to_column_wip_limit, ... }
+
+'use strict';
+
+const { readPayload } = require('./lib');
+
+readPayload('policy-wip-limit', ({ to_column_wip_limit, to_column_card_count }) => {
+  if (to_column_wip_limit !== null && to_column_card_count >= to_column_wip_limit) {
+    process.exit(1);
+  }
+  process.exit(0);
+});
+`;
+
+const SCRIPT_POLICY_NO_PULLBACK = `#!/usr/bin/env node
+// Policy script: no-pullback
+// Exits 1 (violated) if the card is moving backward in the column order.
+// Exits 0 (ok) otherwise.
+//
+// Payload: { from_column, to_column, columns, policy, ... }
+// columns: ordered array of column ids, e.g. ["backlog","refined","in-progress","review","done"]
+
+'use strict';
+
+const { readPayload } = require('./lib');
+
+readPayload('policy-no-pullback', ({ from_column, to_column, columns }) => {
+  const fromIdx = columns.indexOf(from_column);
+  const toIdx   = columns.indexOf(to_column);
+  if (fromIdx !== -1 && toIdx !== -1 && toIdx < fromIdx) {
+    process.exit(1);
+  }
+  process.exit(0);
+});
+`;
+
+const SCRIPT_POLICY_ENTRY_REVIEW = `#!/usr/bin/env node
+// Policy script: entry:review
+// Exits 1 (violated) to require explicit approval before a card enters Review.
+// Customize this script to add your own readiness checks — e.g. check for a
+// #ready tag or verify all checklist items are ticked in the card content.
+//
+// Payload: { card_id, card_title, from_column, to_column, columns, policy, ... }
+
+'use strict';
+
+const { readPayload } = require('./lib');
+
+readPayload('policy-entry-review', () => {
+  // Always require confirmation before entering Review.
+  // Replace with conditional logic to allow certain moves silently (exit 0).
+  process.exit(1);
+});
+`;
+
+const SCRIPT_POLICY_ENTRY_DONE = `#!/usr/bin/env node
+// Policy script: entry:done
+// Exits 1 (violated) to require explicit approval before a card enters Done.
+// Customize this script to add your own acceptance checks.
+//
+// Payload: { card_id, card_title, from_column, to_column, columns, policy, ... }
+
+'use strict';
+
+const { readPayload } = require('./lib');
+
+readPayload('policy-entry-done', () => {
+  // Always require confirmation before entering Done.
+  // Replace with conditional logic to allow certain moves silently (exit 0).
+  process.exit(1);
 });
 `;

@@ -68,6 +68,7 @@ export function readManifest(boardRoot: string): Manifest {
     }
     if (!data.policies) data.policies = {};
     if (!data.board_policies) data.board_policies = [];
+    if (!data.policy_bypass_tags) data.policy_bypass_tags = [];
     // Migrate scripts/hooks from VSCode settings into manifest on first read
     if (!data.scripts || Object.keys(data.scripts).length === 0) {
       const cfg = vscode.workspace.getConfiguration('personal-kanban');

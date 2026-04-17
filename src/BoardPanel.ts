@@ -12,7 +12,7 @@ import {
   calcOrder,
 } from './io';
 import { Card, WebviewMessage } from './types';
-import { fireHook, extractTitle } from './hooks';
+import { fireHook, runPolicyScript, logInfo, extractTitle } from './hooks';
 
 export class BoardPanel {
   public static currentPanel: BoardPanel | undefined;
@@ -183,6 +183,49 @@ export class BoardPanel {
       //   nextOrder = order of the card below insertion point (1 if inserting at bottom)
       //   Lower value = higher position (top of column).
       case 'moveCard': {
+        // Step 1: Run policy scripts before committing. All logic is in scripts — the
+        // extension only orchestrates: run scripts, collect violations, prompt, commit.
+        const { manifest: preManifest } = loadBoardState(this._boardRoot);
+        const preCard = readCard(this._boardRoot, msg.id);
+        const dstColPre = preManifest.columns.find((c) => c.id === msg.toColumn);
+        const basePayload = {
+          event: 'card.moving',
+          timestamp: new Date().toISOString(),
+          card_id: msg.id,
+          card_title: preCard ? extractTitle(preCard.content) : '',
+          from_column: msg.fromColumn,
+          to_column: msg.toColumn,
+          to_column_card_count: dstColPre?.cards?.length ?? 0,
+          to_column_wip_limit: dstColPre?.wip_limit ?? null,
+        };
+        const bypassTags = preManifest.policy_bypass_tags ?? [];
+        const bypassedBy = bypassTags.length > 0 && preCard
+          ? cardHasBypassTag(preCard.content, bypassTags)
+          : null;
+
+        if (bypassedBy) {
+          logInfo(`[policy.bypassed] card=${msg.id} tag=#${bypassedBy} from=${msg.fromColumn} to=${msg.toColumn} — all policy checks skipped`);
+        }
+
+        const violations = bypassedBy
+          ? []
+          : await checkPolicies(this._boardRoot, preManifest, msg.fromColumn, msg.toColumn, basePayload);
+
+        // Step 2: For each violation ask for approval in order. Any cancellation aborts.
+        for (const violation of violations) {
+          const choice = await vscode.window.showWarningMessage(
+            violation.message,
+            { modal: true },
+            'Continue Anyway'
+          );
+          if (choice !== 'Continue Anyway') {
+            // Card snaps back visually — send current state to reset the webview.
+            this._sendState();
+            return;
+          }
+        }
+
+        // Step 3: Commit the move.
         this._suppressWatch();
         const { movedCard, manifest } = withLock(this._boardRoot, () => {
           const { manifest, cards } = loadBoardState(this._boardRoot);
@@ -219,9 +262,9 @@ export class BoardPanel {
         if (movedCard) {
           const movedTitle = extractTitle(movedCard.content);
 
-          const violations = detectPolicyViolations(msg.fromColumn, msg.toColumn, manifest);
+          // Step 4: Fire policy.overridden for each approved violation.
           for (const violation of violations) {
-            fireHook(this._boardRoot, manifest, 'policy.violated', {
+            fireHook(this._boardRoot, manifest, 'policy.overridden', {
               card_id: msg.id,
               card_title: movedTitle,
               from_column: msg.fromColumn,
@@ -239,28 +282,6 @@ export class BoardPanel {
             branch: movedCard.metadata.branch,
             card_path: `cards/${msg.id}.md`,
           });
-          if (msg.toColumn === 'review') {
-            fireHook(this._boardRoot, manifest, 'card.reviewed', {
-              card_id: msg.id,
-              card_title: movedTitle,
-              from_column: msg.fromColumn,
-              branch: movedCard.metadata.branch,
-            });
-          }
-          // WIP check: reload to get accurate post-move column counts.
-          const { manifest: loaded } = loadBoardState(this._boardRoot);
-          const dstCol = loaded.columns.find((c) => c.id === msg.toColumn);
-          if (dstCol?.wip_limit !== null && dstCol?.wip_limit !== undefined) {
-            const count = dstCol.cards?.length ?? 0;
-            if (count > dstCol.wip_limit) {
-              fireHook(this._boardRoot, manifest, 'wip.violated', {
-                column: msg.toColumn,
-                wip_limit: dstCol.wip_limit,
-                current_count: count,
-                card_id: msg.id,
-              });
-            }
-          }
         }
 
         this._sendState();
@@ -360,7 +381,19 @@ export class BoardPanel {
   }
 }
 
-// ── Policy violation detection ────────────────────────────────────────────────
+// ── Policy bypass ─────────────────────────────────────────────────────────────
+
+/**
+ * Returns the first matching bypass tag found in the card content, or null if none.
+ * Tags in content are written as #tagname; bypass tags in config are stored without #.
+ */
+function cardHasBypassTag(content: string, bypassTags: string[]): string | null {
+  const found = content.match(/#([\w-]+)/g) ?? [];
+  const cardTags = found.map((t) => t.slice(1).toLowerCase());
+  return bypassTags.find((t) => cardTags.includes(t.toLowerCase())) ?? null;
+}
+
+// ── Policy checking ───────────────────────────────────────────────────────────
 
 interface PolicyViolation {
   policy: string;
@@ -368,41 +401,42 @@ interface PolicyViolation {
 }
 
 /**
- * Check all applicable policies for a card move and return every violation.
- * Policies are defined in manifest.policies (registry) and referenced by key in:
- *   - manifest.board_policies  — apply to every move
- *   - column.policies          — apply when a card enters that specific column
+ * Run all applicable policy scripts for a card move and return violations.
+ *
+ * Applicable policies are those referenced by:
+ *   - manifest.board_policies  — checked on every move
+ *   - column.policies          — checked when a card enters that specific column
+ *
+ * For each policy, if a `script` is defined it is executed with the move payload.
+ * Exit code 0 = no violation; non-zero = violated.
+ * Policies without a `script` are skipped (documentation only).
  */
-export function detectPolicyViolations(
+async function checkPolicies(
+  boardRoot: string,
+  manifest: import('./types').Manifest,
   fromColumn: string,
   toColumn: string,
-  manifest: import('./types').Manifest
-): PolicyViolation[] {
+  basePayload: Record<string, unknown>
+): Promise<PolicyViolation[]> {
   const registry = manifest.policies ?? {};
-  const columnOrder = manifest.columns.map((c) => c.id);
-  const fromIdx = columnOrder.indexOf(fromColumn);
-  const toIdx   = columnOrder.indexOf(toColumn);
+  const columns = manifest.columns.map((c) => c.id);
   const violations: PolicyViolation[] = [];
 
-  const check = (key: string) => {
+  const keys = [
+    ...(manifest.board_policies ?? []),
+    ...(manifest.columns.find((c) => c.id === toColumn)?.policies ?? []),
+  ];
+
+  for (const key of keys) {
     const def = registry[key];
-    if (!def) return;
+    if (!def?.script) { continue; }
 
-    if (key === 'no-pullback') {
-      if (fromIdx !== -1 && toIdx !== -1 && toIdx < fromIdx) {
-        violations.push({ policy: key, message: def.message });
-      }
-      return;
+    const payload = { ...basePayload, columns, policy: key };
+    const violated = await runPolicyScript(boardRoot, def.script, payload);
+    if (violated) {
+      violations.push({ policy: key, message: def.message });
     }
-
-    // All other policies are treated as entry policies for the destination column.
-    violations.push({ policy: key, message: def.message });
-  };
-
-  for (const key of (manifest.board_policies ?? [])) check(key);
-
-  const dstCol = manifest.columns.find((c) => c.id === toColumn);
-  for (const key of (dstCol?.policies ?? [])) check(key);
+  }
 
   return violations;
 }
