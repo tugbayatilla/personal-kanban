@@ -79,6 +79,7 @@ function initBoard(context: vscode.ExtensionContext): void {
         },
       },
       board_policies: ['wip-limit', 'no-pullback'],
+      policy_bypass_tags: [],
       tags: {},
       scripts: {
         'policy-overridden': { file: 'scripts/policy-overridden.js' },

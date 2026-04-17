@@ -517,6 +517,48 @@ describe('BoardPanel message handler', () => {
 
     /**
      * @spec PANEL-011
+     * @contract A card tagged with a bypass tag must skip all policy checks.
+     *   No dialog must be shown and the move must proceed.
+     */
+    it('skips all policy checks when card has a bypass tag', async () => {
+      const violated = `
+        const { readPayload } = require('./lib');
+        readPayload('p', () => { process.exit(1); });
+      `;
+      fs.writeFileSync(path.join(boardRoot, SCRIPTS_DIR, 'policy-violated.js'), violated);
+
+      const manifest = {
+        version: 1, name: 'Test Board',
+        columns: [
+          { id: 'backlog',     label: 'Backlog',     index: 0, wip_limit: null, policies: [] },
+          { id: 'in-progress', label: 'In Progress', index: 1, wip_limit: null, policies: [] },
+          { id: 'done',        label: 'Done',        index: 2, wip_limit: null, policies: ['entry:done'] },
+        ],
+        policies: {
+          'entry:done': { description: '', message: 'Needs acceptance.', script: `${SCRIPTS_DIR}/policy-violated.js` },
+        },
+        board_policies: [],
+        policy_bypass_tags: ['expedite'],
+        scripts: {}, hooks: {},
+      };
+      fs.writeFileSync(path.join(boardRoot, 'manifest.json'), JSON.stringify(manifest));
+
+      // Card with #expedite tag — should bypass the policy entirely.
+      const card = makeCard('card-1', { column: 'in-progress', order: '0.5' });
+      card.content = '# Task\n\n#expedite\n\nSome content.';
+      writeCard(boardRoot, card);
+
+      await callHandler(workspaceRoot, {
+        type: 'moveCard', id: 'card-1',
+        fromColumn: 'in-progress', toColumn: 'done', toIndex: 0,
+      });
+
+      expect(mockWindow.showWarningMessage).not.toHaveBeenCalled();
+      expect(readCard(boardRoot, 'card-1')!.metadata.column).toBe('done');
+    });
+
+    /**
+     * @spec PANEL-013
      * @contract With multiple policy violations, dialogs appear in order.
      *   Cancelling the first must abort the move without showing the second dialog.
      */

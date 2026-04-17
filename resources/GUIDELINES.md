@@ -90,12 +90,28 @@ Policy scripts receive this payload on stdin:
   "card_title": "...",
   "from_column": "...",
   "to_column": "...",
+  "to_column_card_count": 2,
+  "to_column_wip_limit": 3,
   "columns": ["backlog", "refined", "in-progress", "review", "done"],
   "policy": "no-pullback"
 }
 ```
 
 The `columns` array gives scripts the full column order so they can determine move direction without reading the manifest. Use `readPayload` from `lib.js` to parse the payload.
+
+### Bypassing Policies
+
+Some cards legitimately need to skip all policy checks — urgent fixes, escalations, or expedited work. Add a bypass tag to the card to suppress all policy dialogs for that move.
+
+Bypass tags are configured in `manifest.json`:
+
+```json
+"policy_bypass_tags": ["no-policy", "expedite"]
+```
+
+Any card tagged with `#no-policy` or `#expedite` will move freely without triggering any policy script. To add more bypass tags, append them to the array. To disable bypassing entirely, set the array to `[]`.
+
+Use bypass tags sparingly. Frequent use signals that a policy is too strict or poorly defined.
 
 ### Blocked Cards
 
@@ -150,6 +166,8 @@ Tags describe the nature of the work. Use one primary tag per card.
 | `spike` | Time-boxed research or exploration. Output is knowledge, not code. |
 | `urgent` | Must be resolved before other work. Use sparingly — overuse dilutes the signal. |
 | `blocked` | Work cannot proceed. Requires a note explaining the blocker. |
+| `expedite` | Bypasses all policy checks on move. Reserved for urgent escalations. |
+| `no-policy` | Bypasses all policy checks on move. Use for exceptions that don't fit normal flow. |
 
 ---
 

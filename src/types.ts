@@ -24,6 +24,7 @@ export interface Manifest {
   columns: Column[];
   policies?: Record<string, PolicyDefinition>;
   board_policies?: string[];
+  policy_bypass_tags?: string[];
   tags: Record<string, { color: string; weight: number }>;
   scripts: Record<string, Script>;
   hooks: Record<string, string[]>;

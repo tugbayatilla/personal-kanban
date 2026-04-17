@@ -198,9 +198,14 @@ export class BoardPanel {
           to_column_card_count: dstColPre?.cards?.length ?? 0,
           to_column_wip_limit: dstColPre?.wip_limit ?? null,
         };
-        const violations = await checkPolicies(
-          this._boardRoot, preManifest, msg.fromColumn, msg.toColumn, basePayload
-        );
+        const bypassTags = preManifest.policy_bypass_tags ?? [];
+        const cardBypasses = bypassTags.length > 0 && preCard
+          ? cardHasBypassTag(preCard.content, bypassTags)
+          : false;
+
+        const violations = cardBypasses
+          ? []
+          : await checkPolicies(this._boardRoot, preManifest, msg.fromColumn, msg.toColumn, basePayload);
 
         // Step 2: For each violation ask for approval in order. Any cancellation aborts.
         for (const violation of violations) {
@@ -370,6 +375,18 @@ export class BoardPanel {
 </body>
 </html>`;
   }
+}
+
+// ── Policy bypass ─────────────────────────────────────────────────────────────
+
+/**
+ * Returns true if the card content contains any of the configured bypass tags.
+ * Tags in content are written as #tagname; bypass tags in config are stored without #.
+ */
+function cardHasBypassTag(content: string, bypassTags: string[]): boolean {
+  const found = content.match(/#([\w-]+)/g) ?? [];
+  const cardTags = found.map((t) => t.slice(1).toLowerCase());
+  return bypassTags.some((t) => cardTags.includes(t.toLowerCase()));
 }
 
 // ── Policy checking ───────────────────────────────────────────────────────────
