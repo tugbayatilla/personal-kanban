@@ -1,6 +1,7 @@
 export interface PolicyDefinition {
   description: string;
   message: string;
+  script?: string;
 }
 
 export interface Column {

@@ -72,6 +72,53 @@ function runScript(
 }
 
 /**
+ * Run a single policy script and return whether the policy is violated.
+ *
+ * The script receives the move payload as JSON on stdin.
+ * Exit code 0 = no violation (move may proceed).
+ * Exit code non-zero = policy violated (approval required).
+ *
+ * If the script cannot be spawned, the policy is treated as not violated so
+ * that a missing or broken script never silently blocks all card moves.
+ */
+export function runPolicyScript(
+  boardRoot: string,
+  scriptPath: string,
+  payload: Record<string, unknown>
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const absScript = path.resolve(boardRoot, scriptPath);
+    const fullPayload = JSON.stringify(payload);
+
+    let child;
+    try {
+      child = spawn(process.execPath, [absScript], {
+        cwd: boardRoot,
+        stdio: ['pipe', 'ignore', 'ignore'],
+      });
+    } catch {
+      log(`[policy.check.failed] ${scriptPath} (spawn error)`);
+      resolve(false);
+      return;
+    }
+
+    child.stdin.write(fullPayload);
+    child.stdin.end();
+
+    child.on('close', (code: number | null) => {
+      const violated = code !== null && code !== 0;
+      log(`[policy.check] ${scriptPath} → exit ${code} (${violated ? 'violated' : 'ok'})`);
+      resolve(violated);
+    });
+
+    child.on('error', () => {
+      log(`[policy.check.failed] ${scriptPath} (spawn error)`);
+      resolve(false);
+    });
+  });
+}
+
+/**
  * Fire all scripts registered for an event in manifest.hooks[event].
  *
  * Execution model:

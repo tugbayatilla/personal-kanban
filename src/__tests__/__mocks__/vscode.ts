@@ -89,6 +89,8 @@ export const window = {
   createWebviewPanel: jest.fn(),
   showErrorMessage: jest.fn(),
   showInformationMessage: jest.fn(),
+  showWarningMessage: jest.fn<Promise<string | undefined>, [string, ...unknown[]]>(),
+  showTextDocument: jest.fn(),
 };
 
 // ── vscode.Uri stub ───────────────────────────────────────────────────────────
