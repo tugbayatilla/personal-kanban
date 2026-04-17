@@ -3,7 +3,7 @@ export interface Column {
   label: string;
   index: number;
   wip_limit: number | null;
-  rules: Record<string, unknown>;
+  policies: Record<string, unknown>;
   // In-memory only: assembled from card files on load, not stored in manifest.json
   cards?: string[];
 }

@@ -45,7 +45,7 @@ export function readManifest(boardRoot: string): Manifest {
       label: colLabels[id] ?? id,
       index: idx,
       wip_limit: null,
-      rules: {},
+      policies: {},
     }));
     data.version = 1;
     if (!data.name) data.name = '';
@@ -62,7 +62,7 @@ export function readManifest(boardRoot: string): Manifest {
       if (typeof col.index !== 'number') {
         col.index = data.columns.indexOf(col);
       }
-      if (!col.rules) col.rules = {};
+      if (!col.policies) col.policies = {};
       delete col.cards;
     }
     // Migrate scripts/hooks from VSCode settings into manifest on first read

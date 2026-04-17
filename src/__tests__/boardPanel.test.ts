@@ -59,9 +59,9 @@ function writeMinimalManifest(boardRoot: string, wipLimit: number | null = null)
     version: 1,
     name: 'Test Board',
     columns: [
-      { id: 'backlog',      label: 'Backlog',      index: 0, wip_limit: null,     rules: {} },
-      { id: 'in-progress',  label: 'In Progress',  index: 1, wip_limit: wipLimit, rules: {} },
-      { id: 'done',         label: 'Done',          index: 2, wip_limit: null,     rules: {} },
+      { id: 'backlog',      label: 'Backlog',      index: 0, wip_limit: null,     policies: {} },
+      { id: 'in-progress',  label: 'In Progress',  index: 1, wip_limit: wipLimit, policies: {} },
+      { id: 'done',         label: 'Done',          index: 2, wip_limit: null,     policies: {} },
     ],
     scripts: {},
     hooks: {},

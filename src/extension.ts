@@ -44,17 +44,17 @@ function initBoard(context: vscode.ExtensionContext): void {
   fs.mkdirSync(path.join(boardRoot, 'scripts'), { recursive: true });
 
   if (!boardExists(boardRoot)) {
-    // v1 manifest: columns include index and rules; scripts and hooks are stored
+    // v1 manifest: columns include index and policies; scripts and hooks are stored
     // in manifest.json (not in VSCode settings) so the board is self-contained.
     const manifest: Manifest = {
       version: 1,
       name: path.basename(workspaceRoot),
       columns: [
-        { id: 'backlog',     label: 'Backlog',      index: 0, wip_limit: null, rules: {} },
-        { id: 'refined',     label: 'Refined',       index: 1, wip_limit: null, rules: {} },
-        { id: 'in-progress', label: 'In Progress',   index: 2, wip_limit: null, rules: {} },
-        { id: 'review',      label: 'Review',        index: 3, wip_limit: null, rules: {} },
-        { id: 'done',        label: 'Done',          index: 4, wip_limit: null, rules: {} },
+        { id: 'backlog',     label: 'Backlog',      index: 0, wip_limit: null, policies: {} },
+        { id: 'refined',     label: 'Refined',       index: 1, wip_limit: null, policies: {} },
+        { id: 'in-progress', label: 'In Progress',   index: 2, wip_limit: null, policies: {} },
+        { id: 'review',      label: 'Review',        index: 3, wip_limit: null, policies: {} },
+        { id: 'done',        label: 'Done',          index: 4, wip_limit: null, policies: {} },
       ],
       tags: {},
       scripts: {

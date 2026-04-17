@@ -47,9 +47,9 @@ function writeMinimalManifest(boardRoot: string, overrides: Partial<object> = {}
     version: 1,
     name: 'Test Board',
     columns: [
-      { id: 'backlog',     label: 'Backlog',      index: 0, wip_limit: null, rules: {} },
-      { id: 'in-progress', label: 'In Progress',  index: 1, wip_limit: null, rules: {} },
-      { id: 'done',        label: 'Done',          index: 2, wip_limit: null, rules: {} },
+      { id: 'backlog',     label: 'Backlog',      index: 0, wip_limit: null, policies: {} },
+      { id: 'in-progress', label: 'In Progress',  index: 1, wip_limit: null, policies: {} },
+      { id: 'done',        label: 'Done',          index: 2, wip_limit: null, policies: {} },
     ],
     scripts: {},
     hooks: {},
@@ -297,8 +297,8 @@ describe('readManifest', () => {
         version: 4,
         name: 'V4 Board',
         columns: [
-          { id: 'backlog', label: 'Backlog', index: 0, wip_limit: null, rules: {}, cards: ['card-1', 'card-2'] },
-          { id: 'done',    label: 'Done',    index: 1, wip_limit: null, rules: {}, cards: [] },
+          { id: 'backlog', label: 'Backlog', index: 0, wip_limit: null, policies: {}, cards: ['card-1', 'card-2'] },
+          { id: 'done',    label: 'Done',    index: 1, wip_limit: null, policies: {}, cards: [] },
         ],
         scripts: {},
         hooks: {},
@@ -314,7 +314,7 @@ describe('readManifest', () => {
       }
     });
 
-    it('adds a rules object when a v4 column is missing it', () => {
+    it('adds a policies object when a v4 column is missing it', () => {
       const v4Manifest = {
         version: 4,
         columns: [
@@ -328,7 +328,7 @@ describe('readManifest', () => {
 
       const manifest = readManifest(boardRoot);
 
-      expect(manifest.columns[0].rules).toEqual({});
+      expect(manifest.columns[0].policies).toEqual({});
     });
   });
 });
@@ -388,7 +388,7 @@ describe('writeManifest', () => {
     }
   });
 
-  it('preserves column definitions (id, label, index, wip_limit, rules)', () => {
+  it('preserves column definitions (id, label, index, wip_limit, policies)', () => {
     const manifest = readManifest(boardRoot);
     manifest.columns[1].wip_limit = 3;
     writeManifest(boardRoot, manifest);
