@@ -45,7 +45,7 @@ export function readManifest(boardRoot: string): Manifest {
       label: colLabels[id] ?? id,
       index: idx,
       wip_limit: null,
-      policies: {},
+      policies: [],
     }));
     data.version = 1;
     if (!data.name) data.name = '';
@@ -62,9 +62,12 @@ export function readManifest(boardRoot: string): Manifest {
       if (typeof col.index !== 'number') {
         col.index = data.columns.indexOf(col);
       }
-      if (!col.policies) col.policies = {};
+      // Migrate old object-shaped policies to string[] references
+      if (!Array.isArray(col.policies)) col.policies = [];
       delete col.cards;
     }
+    if (!data.policies) data.policies = {};
+    if (!data.board_policies) data.board_policies = [];
     // Migrate scripts/hooks from VSCode settings into manifest on first read
     if (!data.scripts || Object.keys(data.scripts).length === 0) {
       const cfg = vscode.workspace.getConfiguration('personal-kanban');

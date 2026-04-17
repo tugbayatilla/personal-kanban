@@ -50,12 +50,27 @@ function initBoard(context: vscode.ExtensionContext): void {
       version: 1,
       name: path.basename(workspaceRoot),
       columns: [
-        { id: 'backlog',     label: 'Backlog',      index: 0, wip_limit: null, policies: {} },
-        { id: 'refined',     label: 'Refined',       index: 1, wip_limit: null, policies: {} },
-        { id: 'in-progress', label: 'In Progress',   index: 2, wip_limit: null, policies: {} },
-        { id: 'review',      label: 'Review',        index: 3, wip_limit: null, policies: {} },
-        { id: 'done',        label: 'Done',          index: 4, wip_limit: null, policies: {} },
+        { id: 'backlog',     label: 'Backlog',      index: 0, wip_limit: null, policies: [] },
+        { id: 'refined',     label: 'Refined',       index: 1, wip_limit: null, policies: [] },
+        { id: 'in-progress', label: 'In Progress',   index: 2, wip_limit: null, policies: [] },
+        { id: 'review',      label: 'Review',        index: 3, wip_limit: null, policies: ['entry:review'] },
+        { id: 'done',        label: 'Done',          index: 4, wip_limit: null, policies: ['entry:done'] },
       ],
+      policies: {
+        'no-pullback': {
+          description: 'Cards must not move backward in the value stream. If rework is needed, add a note to the card explaining why.',
+          message: 'Moving a card backward is a policy violation. Add a note to the card explaining why instead.',
+        },
+        'entry:review': {
+          description: 'All acceptance criteria must be met from the worker\'s perspective before a card may enter Review.',
+          message: 'Card is not ready for Review — all acceptance criteria must be met first.',
+        },
+        'entry:done': {
+          description: 'A card may only enter Done after a second person (or the same person after a pause) has verified the outcome.',
+          message: 'Card has not been verified — Done requires independent acceptance.',
+        },
+      },
+      board_policies: ['no-pullback'],
       tags: {},
       scripts: {
         'policy-violation': { file: 'scripts/policy-violation.js' },

@@ -36,22 +36,47 @@ WIP (Work In Progress) limits are the core control mechanism of Kanban. They mak
 
 ## Policies
 
-Policies make implicit agreements explicit. They remove ambiguity about how cards are handled.
+Policies make implicit agreements explicit. They remove ambiguity about how cards are handled. Policies are **config-driven** — defined once in `manifest.json` and referenced where they apply.
 
-### Entry Policies (when a card may enter a column)
+### Defining Policies
 
-| Column | Entry criteria |
-|--------|---------------|
-| Refined | Card has a clear, actionable description. Scope is understood. It can be completed in one session or day. |
-| In Progress | A WIP slot is available. The card is in Refined. The person picking it up has no other active card. |
-| Review | Work is complete. All acceptance criteria are met from the worker's perspective. |
-| Done | A second person (or the same person after a pause) has verified the outcome. |
+Policies are defined in the `policies` registry in `manifest.json`. Each entry has a `description` (for readers of the manifest) and a `message` (shown in notifications when the policy is violated):
 
-### Exit Policies (when a card may leave a column)
+```json
+"policies": {
+  "no-pullback": {
+    "description": "Cards must not move backward in the value stream.",
+    "message": "Moving a card backward is a policy violation. Add a note instead."
+  },
+  "entry:review": {
+    "description": "All acceptance criteria must be met before entering Review.",
+    "message": "Card is not ready for Review — all acceptance criteria must be met first."
+  }
+}
+```
 
-- A card leaves **In Progress** only when the work is genuinely complete — not "mostly done."
-- A card leaves **Review** only when it passes verification, not just when time passes.
-- If work is blocked, mark it blocked on the card and pull the next item. Do not leave it silently stalled.
+### Applying Policies
+
+Once defined, reference policies by key in two places:
+
+- **`board_policies`** — apply to every card move on the board (global):
+  ```json
+  "board_policies": ["no-pullback"]
+  ```
+
+- **`columns[].policies`** — apply when a card enters that specific column:
+  ```json
+  { "id": "review", "policies": ["entry:review"] }
+  ```
+
+To add a policy: add it to the `policies` registry, then reference its key in `board_policies` or the relevant column. To remove a policy: remove its key from wherever it is referenced (the definition in `policies` can stay as documentation).
+
+### Built-in Policy Keys
+
+| Key | Behaviour |
+|-----|-----------|
+| `no-pullback` | Fires when a card moves backward in the column order |
+| any other key | Fires when a card enters the column that references it |
 
 ### Blocked Cards
 
@@ -115,15 +140,17 @@ Scripts in `scripts/` fire automatically in response to board events. They are f
 
 | Hook event | Script | Fires when |
 |------------|--------|------------|
+| `policy.violated` | `policy-violation.js` | A card move violates a board or column policy |
 | `wip.violated` | `wip-alert.js` | A WIP limit is exceeded |
 | `card.created` | `card-created.js` | A new card is created |
 | `card.moved` | `card-moved.js` | A card changes column |
 | `card.moved` | `card-reviewed.js` | A card enters Review |
 | `card.moved` | `card-done.js` | A card enters Done |
-| `card.moved` | `policy-violation.js` | A card move violates an entry policy |
 | `card.edited` | `card-edited.js` | A card's content changes |
 | `card.deleted` | `card-deleted.js` | A card is deleted |
 | `cards.archived` | `cards-archived.js` | Done cards are archived |
+
+The `policy.violated` payload includes `policy` (the key from the registry) and `message` (the human-readable explanation), so scripts know exactly which policy was violated.
 
 Scripts receive a JSON payload via stdin. Shared helpers are in `scripts/lib.js`.
 

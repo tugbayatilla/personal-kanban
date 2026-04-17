@@ -1,9 +1,14 @@
+export interface PolicyDefinition {
+  description: string;
+  message: string;
+}
+
 export interface Column {
   id: string;
   label: string;
   index: number;
   wip_limit: number | null;
-  policies: Record<string, unknown>;
+  policies: string[];
   // In-memory only: assembled from card files on load, not stored in manifest.json
   cards?: string[];
 }
@@ -16,6 +21,8 @@ export interface Manifest {
   version: number;
   name: string;
   columns: Column[];
+  policies?: Record<string, PolicyDefinition>;
+  board_policies?: string[];
   tags: Record<string, { color: string; weight: number }>;
   scripts: Record<string, Script>;
   hooks: Record<string, string[]>;

@@ -328,7 +328,7 @@ describe('readManifest', () => {
 
       const manifest = readManifest(boardRoot);
 
-      expect(manifest.columns[0].policies).toEqual({});
+      expect(manifest.columns[0].policies).toEqual([]);
     });
   });
 });

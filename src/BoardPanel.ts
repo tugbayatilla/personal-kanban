@@ -219,8 +219,8 @@ export class BoardPanel {
         if (movedCard) {
           const movedTitle = extractTitle(movedCard.content);
 
-          const violation = detectPolicyViolation(msg.fromColumn, msg.toColumn, manifest.columns.map((c) => c.id));
-          if (violation) {
+          const violations = detectPolicyViolations(msg.fromColumn, msg.toColumn, manifest);
+          for (const violation of violations) {
             fireHook(this._boardRoot, manifest, 'policy.violated', {
               card_id: msg.id,
               card_title: movedTitle,
@@ -368,40 +368,41 @@ interface PolicyViolation {
 }
 
 /**
- * Column-specific entry policies (keyed by destination column id).
- * These fire when a card enters a particular column regardless of where it came from.
+ * Check all applicable policies for a card move and return every violation.
+ * Policies are defined in manifest.policies (registry) and referenced by key in:
+ *   - manifest.board_policies  — apply to every move
+ *   - column.policies          — apply when a card enters that specific column
  */
-const COLUMN_POLICIES: Record<string, { policy: string; message: string }> = {
-  'review': {
-    policy: 'entry:review',
-    message: 'Cards entering Review must have all acceptance criteria met from the worker\'s perspective.',
-  },
-  'done': {
-    policy: 'entry:done',
-    message: 'Cards entering Done must have been verified by a second person (or the same person after a pause).',
-  },
-};
-
-export function detectPolicyViolation(
+export function detectPolicyViolations(
   fromColumn: string,
   toColumn: string,
-  columnOrder: string[]
-): PolicyViolation | null {
+  manifest: import('./types').Manifest
+): PolicyViolation[] {
+  const registry = manifest.policies ?? {};
+  const columnOrder = manifest.columns.map((c) => c.id);
   const fromIdx = columnOrder.indexOf(fromColumn);
   const toIdx   = columnOrder.indexOf(toColumn);
+  const violations: PolicyViolation[] = [];
 
-  // Global policy: pulling a card backward in the value stream.
-  if (fromIdx !== -1 && toIdx !== -1 && toIdx < fromIdx) {
-    return {
-      policy: 'no-pullback',
-      message: `Moving a card backward from "${fromColumn}" to "${toColumn}" is a policy violation. Add a note to the card explaining why instead.`,
-    };
-  }
+  const check = (key: string) => {
+    const def = registry[key];
+    if (!def) return;
 
-  // Column-specific entry policy.
-  if (COLUMN_POLICIES[toColumn]) {
-    return COLUMN_POLICIES[toColumn];
-  }
+    if (key === 'no-pullback') {
+      if (fromIdx !== -1 && toIdx !== -1 && toIdx < fromIdx) {
+        violations.push({ policy: key, message: def.message });
+      }
+      return;
+    }
 
-  return null;
+    // All other policies are treated as entry policies for the destination column.
+    violations.push({ policy: key, message: def.message });
+  };
+
+  for (const key of (manifest.board_policies ?? [])) check(key);
+
+  const dstCol = manifest.columns.find((c) => c.id === toColumn);
+  for (const key of (dstCol?.policies ?? [])) check(key);
+
+  return violations;
 }
