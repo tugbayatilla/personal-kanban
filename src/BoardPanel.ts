@@ -10,6 +10,7 @@ import {
   generateId,
   loadBoardState,
   withLock,
+  calcOrder,
 } from './io';
 import { Card, WebviewMessage } from './types';
 import { fireHook, extractTitle } from './hooks';
@@ -21,7 +22,8 @@ export class BoardPanel {
   private readonly _boardRoot: string;
   private readonly _extensionUri: vscode.Uri;
   private _disposables: vscode.Disposable[] = [];
-  private _suppressNextWatch = false;
+  /** Suppress watcher-triggered reloads until this timestamp (ms). */
+  private _suppressWatchUntil = 0;
 
   public static createOrShow(context: vscode.ExtensionContext, workspaceRoot: string, channel: vscode.OutputChannel): void {
     if (BoardPanel.currentPanel) {
@@ -62,7 +64,6 @@ export class BoardPanel {
     );
 
     this._panel.webview.html = this._getHtml();
-
     this._startWatcher();
   }
 
@@ -80,6 +81,11 @@ export class BoardPanel {
     }
   }
 
+  /** Suppress watcher-triggered reloads for the next 1 second. */
+  private _suppressWatch(): void {
+    this._suppressWatchUntil = Date.now() + 1000;
+  }
+
   private async _handleMessage(msg: WebviewMessage): Promise<void> {
     switch (msg.type) {
       case 'ready': {
@@ -87,67 +93,79 @@ export class BoardPanel {
         break;
       }
 
+      // ── Add card ────────────────────────────────────────────────────────────
+      // Card column is written into the card's own metadata — no manifest write needed.
+      // New card is appended to the end of the column (order = midpoint of last card and 1).
       case 'addCard': {
         const id = generateId();
         const now = new Date().toISOString();
-        const card: Card = {
-          id,
-          content: '',
-          metadata: { created_at: now },
-        };
-        this._suppressNextWatch = true;
-        const m1 = withLock(this._boardRoot, () => {
-          const manifest = readManifest(this._boardRoot);
-          const addCol = manifest.columns.find((c) => c.id === msg.columnId);
+
+        this._suppressWatch();
+        const { newCard, manifest } = withLock(this._boardRoot, () => {
+          const { manifest, cards } = loadBoardState(this._boardRoot);
+          const col = manifest.columns.find((c) => c.id === msg.columnId);
+          const colCards = col?.cards ?? [];
+
+          // Place new card at the end of the column.
+          const lastOrder = colCards.length > 0
+            ? parseFloat(cards[colCards[colCards.length - 1]]?.metadata.order ?? '0') || 0
+            : 0;
+          const order = calcOrder(lastOrder, 1);
+
+          const card: Card = {
+            id,
+            content: '',
+            metadata: {
+              created_at: now,
+              column: msg.columnId,
+              order: String(order),
+            },
+          };
           writeCard(this._boardRoot, card);
-          if (addCol) { addCol.cards.push(id); }
-          writeManifest(this._boardRoot, manifest);
-          return manifest;
+          return { newCard: card, manifest };
         });
-        fireHook(this._boardRoot, m1, 'card.created', {
+
+        fireHook(this._boardRoot, manifest, 'card.created', {
           card_id: id,
           card_title: '',
           column: msg.columnId,
+          card_path: `cards/${id}.md`,
         });
         this._sendState(id);
         break;
       }
 
+      // ── Save card ───────────────────────────────────────────────────────────
       case 'saveCard': {
         const existing = readCard(this._boardRoot, msg.id);
         if (existing && existing.content !== msg.content) {
+          this._suppressWatch();
           existing.content = msg.content;
           writeCard(this._boardRoot, existing);
           const manifest = readManifest(this._boardRoot);
           fireHook(this._boardRoot, manifest, 'card.edited', {
             card_id: msg.id,
             card_title: extractTitle(msg.content),
+            card_path: `cards/${msg.id}.md`,
           });
         }
         this._sendState();
         break;
       }
 
+      // ── Delete card ─────────────────────────────────────────────────────────
+      // Column is read from the card's own metadata — no manifest search needed.
       case 'deleteCard': {
-        this._suppressNextWatch = true;
-        const { m2, deletedTitle, deletedFromColumn } = withLock(this._boardRoot, () => {
+        this._suppressWatch();
+        const { manifest, deletedTitle, deletedFromColumn } = withLock(this._boardRoot, () => {
           const manifest = readManifest(this._boardRoot);
-          const deletedCard = readCard(this._boardRoot, msg.id);
-          const title = deletedCard ? extractTitle(deletedCard.content) : '';
-          let fromColumn = '';
-          for (const col of manifest.columns) {
-            const idx = col.cards.indexOf(msg.id);
-            if (idx !== -1) {
-              fromColumn = col.id;
-              col.cards.splice(idx, 1);
-              break;
-            }
-          }
-          writeManifest(this._boardRoot, manifest);
+          const card = readCard(this._boardRoot, msg.id);
+          const title = card ? extractTitle(card.content) : '';
+          const fromColumn = card?.metadata.column ?? '';
           deleteCardFile(this._boardRoot, msg.id);
-          return { m2: manifest, deletedTitle: title, deletedFromColumn: fromColumn };
+          return { manifest, deletedTitle: title, deletedFromColumn: fromColumn };
         });
-        fireHook(this._boardRoot, m2, 'card.deleted', {
+        fireHook(this._boardRoot, manifest, 'card.deleted', {
           card_id: msg.id,
           card_title: deletedTitle,
           last_column: deletedFromColumn,
@@ -156,75 +174,95 @@ export class BoardPanel {
         break;
       }
 
+      // ── Move card ───────────────────────────────────────────────────────────
+      // Writes `column` and `order` into the moved card's file only.
+      // No other cards are modified. No manifest write.
+      //
+      // Order calculation (midpoint / fractional indexing):
+      //   newOrder = (prevOrder + nextOrder) / 2
+      //   prevOrder = order of the card above insertion point (0 if inserting at top)
+      //   nextOrder = order of the card below insertion point (1 if inserting at bottom)
+      //   Lower value = higher position (top of column).
       case 'moveCard': {
-        this._suppressNextWatch = true;
-        const { m3, movedCard } = withLock(this._boardRoot, () => {
-          const manifest = readManifest(this._boardRoot);
+        this._suppressWatch();
+        const { movedCard, manifest } = withLock(this._boardRoot, () => {
+          const { manifest, cards } = loadBoardState(this._boardRoot);
           const card = readCard(this._boardRoot, msg.id);
-          // Remove from source column
-          const srcCol = manifest.columns.find((c) => c.id === msg.fromColumn);
-          if (srcCol) {
-            const srcIdx = srcCol.cards.indexOf(msg.id);
-            if (srcIdx !== -1) { srcCol.cards.splice(srcIdx, 1); }
-          }
-          // Insert at target position
+          if (!card) return { movedCard: null, manifest };
+
+          // Build destination column card list, excluding the card being moved.
           const dstCol = manifest.columns.find((c) => c.id === msg.toColumn);
-          if (dstCol) {
-            const toIdx = Math.max(0, Math.min(msg.toIndex, dstCol.cards.length));
-            dstCol.cards.splice(toIdx, 0, msg.id);
+          const dstCards = (dstCol?.cards ?? []).filter((cid) => cid !== msg.id);
+
+          const toIdx = Math.max(0, Math.min(msg.toIndex, dstCards.length));
+          const prevOrder = toIdx > 0
+            ? parseFloat(cards[dstCards[toIdx - 1]]?.metadata.order ?? '0') || 0
+            : 0;
+          const nextOrder = toIdx < dstCards.length
+            ? parseFloat(cards[dstCards[toIdx]]?.metadata.order ?? '1') || 1
+            : 1;
+
+          const now = new Date().toISOString();
+          card.metadata.column = msg.toColumn;
+          card.metadata.order = String(calcOrder(prevOrder, nextOrder));
+
+          if (msg.toColumn === 'in-progress' && !card.metadata.active_at) {
+            card.metadata.active_at = now;
           }
-          writeManifest(this._boardRoot, manifest);
-          // Stamp timestamps on card
-          if (card) {
-            const now = new Date().toISOString();
-            if (msg.toColumn === 'in-progress' && !card.metadata.active_at) {
-              card.metadata.active_at = now;
-            }
-            if (msg.toColumn === 'done') {
-              card.metadata.done_at = now;
-            }
-            writeCard(this._boardRoot, card);
+          if (msg.toColumn === 'done') {
+            card.metadata.done_at = now;
           }
-          return { m3: manifest, movedCard: card };
+
+          writeCard(this._boardRoot, card);
+          return { movedCard: card, manifest };
         });
-        const movedTitle = movedCard ? extractTitle(movedCard.content) : '';
-        fireHook(this._boardRoot, m3, 'card.moved', {
-          card_id: msg.id,
-          card_title: movedTitle,
-          from_column: msg.fromColumn,
-          to_column: msg.toColumn,
-          branch: movedCard?.metadata.branch,
-        });
-        if (msg.toColumn === 'review') {
-          fireHook(this._boardRoot, m3, 'card.reviewed', {
+
+        if (movedCard) {
+          const movedTitle = extractTitle(movedCard.content);
+          fireHook(this._boardRoot, manifest, 'card.moved', {
             card_id: msg.id,
             card_title: movedTitle,
             from_column: msg.fromColumn,
-            branch: movedCard?.metadata.branch,
+            to_column: msg.toColumn,
+            branch: movedCard.metadata.branch,
+            card_path: `cards/${msg.id}.md`,
           });
-        }
-        const destColumn = m3.columns.find((c) => c.id === msg.toColumn);
-        if (destColumn?.wip_limit !== null && destColumn?.wip_limit !== undefined) {
-          const destCount = destColumn.cards?.length ?? 0;
-          if (destCount > destColumn.wip_limit) {
-            fireHook(this._boardRoot, m3, 'wip.violated', {
-              column: msg.toColumn,
-              wip_limit: destColumn.wip_limit,
-              current_count: destCount,
+          if (msg.toColumn === 'review') {
+            fireHook(this._boardRoot, manifest, 'card.reviewed', {
               card_id: msg.id,
+              card_title: movedTitle,
+              from_column: msg.fromColumn,
+              branch: movedCard.metadata.branch,
             });
           }
+          // WIP check: reload to get accurate post-move column counts.
+          const { manifest: loaded } = loadBoardState(this._boardRoot);
+          const dstCol = loaded.columns.find((c) => c.id === msg.toColumn);
+          if (dstCol?.wip_limit !== null && dstCol?.wip_limit !== undefined) {
+            const count = dstCol.cards?.length ?? 0;
+            if (count > dstCol.wip_limit) {
+              fireHook(this._boardRoot, manifest, 'wip.violated', {
+                column: msg.toColumn,
+                wip_limit: dstCol.wip_limit,
+                current_count: count,
+                card_id: msg.id,
+              });
+            }
+          }
         }
+
         this._sendState();
         break;
       }
 
+      // ── Archive done ────────────────────────────────────────────────────────
+      // Done cards are discovered by loading state (scanning card files).
       case 'archiveDone': {
-        this._suppressNextWatch = true;
+        this._suppressWatch();
         const m4 = withLock(this._boardRoot, () => {
-          const manifest = readManifest(this._boardRoot);
+          const { manifest } = loadBoardState(this._boardRoot);
           const doneCol = manifest.columns.find((c) => c.id === 'done');
-          if (doneCol && doneCol.cards.length > 0) {
+          if (doneCol && doneCol.cards && doneCol.cards.length > 0) {
             const archivedAt = new Date().toISOString();
             for (const id of doneCol.cards) {
               const card = readCard(this._boardRoot, id);
@@ -234,8 +272,6 @@ export class BoardPanel {
               }
               archiveCardFile(this._boardRoot, id);
             }
-            doneCol.cards = [];
-            writeManifest(this._boardRoot, manifest);
           }
           return manifest;
         });
@@ -247,20 +283,29 @@ export class BoardPanel {
   }
 
   private _startWatcher(): void {
-    const manifestDir = vscode.Uri.file(this._boardRoot);
-    const watcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(manifestDir, 'manifest.json')
-    );
+    const boardDir = vscode.Uri.file(this._boardRoot);
     const onChange = () => {
-      if (this._suppressNextWatch) {
-        this._suppressNextWatch = false;
-        return;
-      }
+      if (Date.now() < this._suppressWatchUntil) return;
       this._sendState();
     };
-    watcher.onDidChange(onChange, null, this._disposables);
-    watcher.onDidCreate(onChange, null, this._disposables);
-    this._disposables.push(watcher);
+
+    // Watch manifest.json for external changes (column structure, scripts, hooks).
+    const manifestWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(boardDir, 'manifest.json')
+    );
+    manifestWatcher.onDidChange(onChange, null, this._disposables);
+    manifestWatcher.onDidCreate(onChange, null, this._disposables);
+    this._disposables.push(manifestWatcher);
+
+    // Watch card files — board state is derived from these in v1.
+    // External edits (e.g. changing `column:` via a script) will reload the board.
+    const cardsWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(boardDir, 'cards/*.md')
+    );
+    cardsWatcher.onDidChange(onChange, null, this._disposables);
+    cardsWatcher.onDidCreate(onChange, null, this._disposables);
+    cardsWatcher.onDidDelete(onChange, null, this._disposables);
+    this._disposables.push(cardsWatcher);
   }
 
   private _dispose(): void {

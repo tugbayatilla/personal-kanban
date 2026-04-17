@@ -383,27 +383,71 @@
     menu.appendChild(menuItem('Metadata', function () {
       const existing = cardEl.querySelector('.card-metadata-popup');
       if (existing) { existing.remove(); return; }
+
       const meta = (state.cards[id] && state.cards[id].metadata) || {};
       const popup = document.createElement('div');
       popup.className = 'card-metadata-popup';
-      function metaRow(label, value) {
-        return '<div><span class="meta-label">' + escHtml(label) + '</span>' + escHtml(value || '\u2014') + '</div>';
+
+      function addRow(label, value) {
+        const div = document.createElement('div');
+        const lbl = document.createElement('span');
+        lbl.className = 'meta-label';
+        lbl.textContent = label;
+        div.appendChild(lbl);
+        div.appendChild(document.createTextNode(
+          value !== undefined && value !== null && value !== '' ? String(value) : '\u2014'
+        ));
+        popup.appendChild(div);
       }
-      const knownKeys = ['created_at', 'active_at', 'done_at', 'branch', 'archived_at'];
-      let rows = metaRow('id:', id) +
-        metaRow('created:', meta.created_at ? new Date(meta.created_at).toLocaleString() : '') +
-        (meta.active_at ? metaRow('active:', new Date(meta.active_at).toLocaleString()) : '') +
-        (meta.done_at ? metaRow('done:', new Date(meta.done_at).toLocaleString()) : '') +
-        (meta.done_at ? metaRow('lead time:', formatDuration(meta.created_at, meta.done_at)) : '') +
-        (meta.active_at && meta.done_at ? metaRow('cycle time:', formatDuration(meta.active_at, meta.done_at)) : '') +
-        metaRow('branch:', meta.branch || '') +
-        (meta.archived_at ? metaRow('archived:', new Date(meta.archived_at).toLocaleString()) : '');
+
+      function fmtDate(val) {
+        if (!val) return null;
+        const d = new Date(val);
+        return isNaN(d.getTime()) ? null : d.toLocaleString();
+      }
+
+      // Priority fields: always shown in this order, with optional formatting.
+      // Date fields are formatted as locale strings; others shown as-is.
+      // Fields that are absent or empty are skipped.
+      var PRIORITY = [
+        ['created_at',  'created:',  fmtDate],
+        ['column',      'column:',   null],
+        ['order',       'order:',    null],
+        ['active_at',   'active:',   fmtDate],
+        ['done_at',     'done:',     fmtDate],
+        ['branch',      'branch:',   null],
+        ['archived_at', 'archived:', fmtDate],
+      ];
+      var PRIORITY_KEYS = {};
+      PRIORITY.forEach(function (p) { PRIORITY_KEYS[p[0]] = true; });
+
+      // id is always first (it lives on the card, not in metadata)
+      addRow('id:', id);
+
+      for (var i = 0; i < PRIORITY.length; i++) {
+        var key = PRIORITY[i][0], label = PRIORITY[i][1], fmt = PRIORITY[i][2];
+        var raw = meta[key];
+        if (raw !== undefined && raw !== null && raw !== '') {
+          addRow(label, fmt ? (fmtDate(raw) || raw) : raw);
+        }
+      }
+
+      // Computed fields (derived, not stored in metadata)
+      if (meta.done_at) {
+        addRow('lead time:', formatDuration(meta.created_at, meta.done_at));
+      }
+      if (meta.active_at && meta.done_at) {
+        addRow('cycle time:', formatDuration(meta.active_at, meta.done_at));
+      }
+
+      // All remaining metadata fields not in the priority list, in natural order.
+      // Any field added to a card now or in the future will appear here automatically.
       Object.keys(meta).forEach(function (key) {
-        if (!knownKeys.includes(key)) {
-          rows += metaRow(key + ':', String(meta[key]));
+        if (!PRIORITY_KEYS[key] && meta[key] !== undefined && meta[key] !== null && meta[key] !== '') {
+          addRow(key + ':', String(meta[key]));
         }
       });
-      popup.innerHTML = rows;
+
       cardEl.appendChild(popup);
       setTimeout(function () {
         document.addEventListener('click', function closePopup(ev) {

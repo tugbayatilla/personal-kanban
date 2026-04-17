@@ -27,7 +27,8 @@ export function boardExists(boardRoot: string): boolean {
 export function readManifest(boardRoot: string): Manifest {
   const raw = fs.readFileSync(getManifestPath(boardRoot), 'utf-8');
   const data = JSON.parse(raw);
-  // Migrate v3 object-format columns to v4 Column[] array
+
+  // Migrate v3 object-format columns → v4 Column[] array
   if (!Array.isArray(data.columns)) {
     const colOrder = ['backlog', 'refined', 'in-progress', 'review', 'done'];
     const colLabels: Record<string, string> = {
@@ -39,24 +40,49 @@ export function readManifest(boardRoot: string): Manifest {
       ...colOrder.filter(id => colIds.includes(id)),
       ...colIds.filter(id => !colOrder.includes(id)),
     ];
-    data.columns = ordered.map((id: string) => ({
+    data.columns = ordered.map((id: string, idx: number) => ({
       id,
       label: colLabels[id] ?? id,
+      index: idx,
       wip_limit: null,
-      cards: (data.columns as Record<string, string[]>)[id] ?? [],
+      rules: {},
     }));
-    data.version = 4;
+    data.version = 1;
     if (!data.name) data.name = '';
-    if (!data.tags) data.tags = {};
     if (!data.scripts) data.scripts = {};
     if (!data.hooks) data.hooks = {};
   }
+
+  // Migrate v4 (cards-in-columns) → v1 (cards-in-files)
+  // v4 stored cards: string[] on each column; v1 derives card placement from card metadata.
+  // Strip the persisted cards arrays — they will be re-populated by loadBoardState().
+  if (data.version <= 4) {
+    for (const col of data.columns) {
+      // Preserve index ordering from array position if index field is absent
+      if (typeof col.index !== 'number') {
+        col.index = data.columns.indexOf(col);
+      }
+      if (!col.rules) col.rules = {};
+      delete col.cards;
+    }
+    // Migrate scripts/hooks from VSCode settings into manifest on first read
+    if (!data.scripts || Object.keys(data.scripts).length === 0) {
+      const cfg = vscode.workspace.getConfiguration('personal-kanban');
+      data.scripts = cfg.get<Manifest['scripts']>('scripts', {});
+    }
+    if (!data.hooks || Object.keys(data.hooks).length === 0) {
+      const cfg = vscode.workspace.getConfiguration('personal-kanban');
+      data.hooks = cfg.get<Manifest['hooks']>('hooks', {});
+    }
+    data.version = 1;
+  }
+
+  // Tags, tagColorTarget, and showCardAge remain in VSCode settings (workspace-level config).
   const config = vscode.workspace.getConfiguration('personal-kanban');
   data.tags = config.get<Manifest['tags']>('tags', {});
-  data.scripts = config.get<Manifest['scripts']>('scripts', {});
-  data.hooks = config.get<Manifest['hooks']>('hooks', {});
   data.tagColorTarget = config.get<Manifest['tagColorTarget']>('tagColorTarget', 'tag');
   data.showCardAge = config.get<boolean>('showCardAge', true);
+
   return data as Manifest;
 }
 
@@ -73,20 +99,17 @@ export function withLock<T>(boardRoot: string, fn: () => T): T {
 
   for (;;) {
     try {
-      // O_EXCL: fails atomically if lock file already exists
       const fd = fs.openSync(lockPath, 'wx');
       fs.writeSync(fd, process.pid.toString());
       fs.closeSync(fd);
-      break; // lock acquired
+      break;
     } catch (e: unknown) {
       if ((e as NodeJS.ErrnoException).code !== 'EEXIST') { throw e; }
       if (Date.now() >= deadline) {
-        // Check for stale lock (dead process)
         try {
           const pid = parseInt(fs.readFileSync(lockPath, 'utf-8'), 10);
           if (!isNaN(pid)) {
             try { process.kill(pid, 0); } catch {
-              // Process is dead — remove stale lock and retry
               try { fs.unlinkSync(lockPath); } catch { /* ignore */ }
               continue;
             }
@@ -94,7 +117,6 @@ export function withLock<T>(boardRoot: string, fn: () => T): T {
         } catch { /* ignore */ }
         throw new Error(`manifest.lock: could not acquire within ${LOCK_TIMEOUT_MS}ms`);
       }
-      // Sleep without burning CPU (Atomics.wait is a real block, not a spin)
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, LOCK_RETRY_MS);
     }
   }
@@ -117,7 +139,6 @@ function atomicWrite(target: string, content: string): void {
     fs.closeSync(fd);
   }
   fs.renameSync(tmp, target);
-  // Best-effort fsync of parent directory (POSIX only)
   try {
     const dirFd = fs.openSync(path.dirname(target), fs.constants.O_RDONLY);
     try { fs.fsyncSync(dirFd); } catch { /* ignore */ }
@@ -126,10 +147,20 @@ function atomicWrite(target: string, content: string): void {
 }
 
 export function writeManifest(boardRoot: string, manifest: Manifest): void {
+  // Strip runtime-only fields: tags/tagColorTarget/showCardAge come from VSCode settings.
+  // Strip in-memory cards arrays from columns — card placement is derived from card files.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { tags, scripts, hooks, showCardAge, ...toWrite } = manifest;
-  atomicWrite(getManifestPath(boardRoot), JSON.stringify(toWrite, null, 2));
+  const { tags, showCardAge, tagColorTarget, ...toWrite } = manifest;
+  const columnsToWrite = toWrite.columns.map(({ cards: _cards, ...col }) => col);
+  const data = { ...toWrite, columns: columnsToWrite };
+  atomicWrite(getManifestPath(boardRoot), JSON.stringify(data, null, 2));
 }
+
+// ── Card I/O ────────────────────────────────────────────────────────────────
+
+const KNOWN_CARD_KEYS = new Set([
+  'id', 'created_at', 'column', 'order', 'active_at', 'done_at', 'branch', 'archived_at',
+]);
 
 function parseCardMd(raw: string, id: string): Card {
   const now = new Date().toISOString();
@@ -143,10 +174,9 @@ function parseCardMd(raw: string, id: string): Card {
     if (colon === -1) continue;
     fm[line.slice(0, colon).trim()] = line.slice(colon + 1).trim();
   }
-  const knownKeys = new Set(['id', 'created_at', 'active_at', 'done_at', 'branch', 'archived_at']);
   const extra: Record<string, string> = {};
   for (const key of Object.keys(fm)) {
-    if (!knownKeys.has(key)) {
+    if (!KNOWN_CARD_KEYS.has(key)) {
       extra[key] = fm[key];
     }
   }
@@ -155,9 +185,11 @@ function parseCardMd(raw: string, id: string): Card {
     content: match[2].replace(/^\n/, ''),
     metadata: {
       created_at: fm.created_at ?? now,
-      ...(fm.active_at ? { active_at: fm.active_at } : {}),
-      ...(fm.done_at ? { done_at: fm.done_at } : {}),
-      ...(fm.branch ? { branch: fm.branch } : {}),
+      ...(fm.column     ? { column:      fm.column }      : {}),
+      ...(fm.order      ? { order:       fm.order }       : {}),
+      ...(fm.active_at  ? { active_at:   fm.active_at }   : {}),
+      ...(fm.done_at    ? { done_at:     fm.done_at }     : {}),
+      ...(fm.branch     ? { branch:      fm.branch }      : {}),
       ...(fm.archived_at ? { archived_at: fm.archived_at } : {}),
       ...extra,
     },
@@ -170,21 +202,15 @@ function serializeCardMd(card: Card): string {
     `id: ${card.id}`,
     `created_at: ${card.metadata.created_at}`,
   ];
-  if (card.metadata.active_at) {
-    lines.push(`active_at: ${card.metadata.active_at}`);
-  }
-  if (card.metadata.done_at) {
-    lines.push(`done_at: ${card.metadata.done_at}`);
-  }
-  if (card.metadata.branch) {
-    lines.push(`branch: ${card.metadata.branch}`);
-  }
-  if (card.metadata.archived_at) {
-    lines.push(`archived_at: ${card.metadata.archived_at}`);
-  }
-  const knownKeys = new Set(['created_at', 'active_at', 'done_at', 'branch', 'archived_at']);
+  if (card.metadata.column)      { lines.push(`column: ${card.metadata.column}`); }
+  if (card.metadata.order)       { lines.push(`order: ${card.metadata.order}`); }
+  if (card.metadata.active_at)   { lines.push(`active_at: ${card.metadata.active_at}`); }
+  if (card.metadata.done_at)     { lines.push(`done_at: ${card.metadata.done_at}`); }
+  if (card.metadata.branch)      { lines.push(`branch: ${card.metadata.branch}`); }
+  if (card.metadata.archived_at) { lines.push(`archived_at: ${card.metadata.archived_at}`); }
+
   for (const [key, value] of Object.entries(card.metadata)) {
-    if (!knownKeys.has(key) && value !== undefined) {
+    if (!KNOWN_CARD_KEYS.has(key) && value !== undefined) {
       lines.push(`${key}: ${value}`);
     }
   }
@@ -194,17 +220,15 @@ function serializeCardMd(card: Card): string {
 }
 
 export function readCard(boardRoot: string, id: string): Card | null {
-  // Active cards
   const mdPath = getCardPath(boardRoot, id);
   if (fs.existsSync(mdPath)) {
     return parseCardMd(fs.readFileSync(mdPath, 'utf-8'), id);
   }
-  // Archived cards
   const archivePath = getArchivePath(boardRoot, id);
   if (fs.existsSync(archivePath)) {
     return parseCardMd(fs.readFileSync(archivePath, 'utf-8'), id);
   }
-  // Legacy: card stored in cards/{id}/{id}.md subdirectory
+  // Legacy: card in cards/{id}/{id}.md subdirectory
   const legacyDirPath = path.join(boardRoot, 'cards', id, `${id}.md`);
   if (fs.existsSync(legacyDirPath)) {
     return parseCardMd(fs.readFileSync(legacyDirPath, 'utf-8'), id);
@@ -220,9 +244,7 @@ export function readCard(boardRoot: string, id: string): Card | null {
 export function writeCard(boardRoot: string, card: Card): void {
   const folder = path.join(boardRoot, 'cards');
   fs.mkdirSync(folder, { recursive: true });
-  const target = path.join(folder, `${card.id}.md`);
-  atomicWrite(target, serializeCardMd(card));
-  // Remove legacy .json file if it exists
+  atomicWrite(path.join(folder, `${card.id}.md`), serializeCardMd(card));
   const jsonPath = path.join(boardRoot, 'cards', `${card.id}.json`);
   if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath);
 }
@@ -252,18 +274,92 @@ export function generateId(): string {
   return `${date}-${hex}`;
 }
 
+// ── Midpoint ordering ────────────────────────────────────────────────────────
+//
+// Cards within a column are ordered by a decimal `order` value in [0, 1).
+// Lower value = higher position (top of column). Boundaries are:
+//   - 0  (exclusive lower bound — nothing goes above 0)
+//   - 1  (exclusive upper bound — nothing goes at or above 1)
+//
+// Inserting at a position uses the midpoint formula:
+//   newOrder = (prevOrder + nextOrder) / 2
+//
+// Where:
+//   - prevOrder = order of the card above the insertion point (or 0 if inserting at top)
+//   - nextOrder = order of the card below the insertion point (or 1 if inserting at bottom)
+//
+// Examples:
+//   Empty column, first card:             (0 + 1) / 2 = 0.5
+//   Second card after first (0.5):        (0.5 + 1) / 2 = 0.75
+//   Third card between 0.5 and 0.75:      (0.5 + 0.75) / 2 = 0.625
+//
+// Only the moved/added card's `order` field is ever written — no other cards change.
+// This is the fractional indexing / midpoint ordering pattern.
+//
+// Precision: JavaScript doubles give ~15 significant digits, so midpoint subdivision
+// can be repeated ~50 times before values collapse. In practice this is not a concern.
+
+export function calcOrder(prevOrder: number, nextOrder: number): number {
+  return (prevOrder + nextOrder) / 2;
+}
+
+// ── Board state ──────────────────────────────────────────────────────────────
+
 export function loadBoardState(boardRoot: string): {
   manifest: Manifest;
   cards: Record<string, Card | null>;
 } {
   const manifest = readManifest(boardRoot);
   const cards: Record<string, Card | null> = {};
-  for (const col of manifest.columns) {
-    for (const id of col.cards ?? []) {
-      if (!(id in cards)) {
-        cards[id] = readCard(boardRoot, id);
-      }
+
+  // Scan all .md files in cards/ — card column membership comes from card metadata.
+  const cardsDir = path.join(boardRoot, 'cards');
+  if (fs.existsSync(cardsDir)) {
+    for (const file of fs.readdirSync(cardsDir)) {
+      if (!file.endsWith('.md')) continue;
+      const id = file.slice(0, -3);
+      cards[id] = parseCardMd(fs.readFileSync(path.join(cardsDir, file), 'utf-8'), id);
     }
   }
+
+  // Default column: first column in manifest (fallback when a card has no `column` field).
+  const defaultColumnId = manifest.columns[0]?.id ?? 'backlog';
+
+  // Build per-column card lists, sorted by `order` ascending (lower = top).
+  // Cards without an `order` field fall back to `created_at` for sorting.
+  const columnBuckets: Record<string, { id: string; sortKey: number }[]> = {};
+  for (const col of manifest.columns) {
+    columnBuckets[col.id] = [];
+  }
+
+  for (const [id, card] of Object.entries(cards)) {
+    if (!card) continue;
+    const colId = card.metadata.column ?? defaultColumnId;
+    if (!columnBuckets[colId]) {
+      // Card references an unknown column — put it in the default column.
+      columnBuckets[defaultColumnId] = columnBuckets[defaultColumnId] ?? [];
+      columnBuckets[defaultColumnId].push({ id, sortKey: toSortKey(card) });
+    } else {
+      columnBuckets[colId].push({ id, sortKey: toSortKey(card) });
+    }
+  }
+
+  // Attach sorted card ID arrays onto each column (in-memory only; not written to manifest).
+  for (const col of manifest.columns) {
+    const bucket = columnBuckets[col.id] ?? [];
+    bucket.sort((a, b) => a.sortKey - b.sortKey);
+    col.cards = bucket.map(e => e.id);
+  }
+
   return { manifest, cards };
+}
+
+/** Convert a card's order/created_at to a numeric sort key. */
+function toSortKey(card: Card): number {
+  if (card.metadata.order) {
+    const n = parseFloat(card.metadata.order);
+    if (!isNaN(n)) return n;
+  }
+  // Fall back to created_at timestamp for cards that predate the order field.
+  return new Date(card.metadata.created_at).getTime();
 }
