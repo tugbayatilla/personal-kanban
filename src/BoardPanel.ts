@@ -146,6 +146,7 @@ export class BoardPanel {
           fireHook(this._boardRoot, manifest, 'card.edited', {
             card_id: msg.id,
             card_title: extractTitle(msg.content),
+            card_path: `cards/${msg.id}.md`,
           });
         }
         this._sendState();

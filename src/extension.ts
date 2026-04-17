@@ -305,13 +305,16 @@ const SCRIPT_CARD_EDITED = `#!/usr/bin/env node
 // Fires when a card's content changes.
 //
 // Hook event: card.edited
-// Payload: { event, timestamp, card_id, card_title }
+// Payload: { event, timestamp, card_id, card_title, card_path }
+//
+// card_path is relative to the board root (e.g. "cards/20260401-8d96.md").
+// Use updateCardMetadata(card_path, { key: value }) from lib.js to patch metadata.
 
 'use strict';
 
 const { readPayload } = require('./lib');
 
-readPayload('card-edited', ({ card_id, card_title }) => {
+readPayload('card-edited', ({ card_id, card_title, card_path }) => {
   process.stdout.write(\`card edited: "\${card_title}" (\${card_id})\\n\`);
 });
 `;
