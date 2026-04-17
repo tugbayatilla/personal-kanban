@@ -354,10 +354,16 @@
     menu.id = 'kanban-context-menu';
     menu.className = 'context-menu';
 
-    function menuItem(label, action, destructive) {
+    function menuItem(icon, label, action, destructive) {
       const item = document.createElement('button');
       item.className = 'context-menu-item' + (destructive ? ' context-menu-item--danger' : '');
-      item.textContent = label;
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'context-menu-icon';
+      iconSpan.textContent = icon;
+      const labelSpan = document.createElement('span');
+      labelSpan.textContent = label;
+      item.appendChild(iconSpan);
+      item.appendChild(labelSpan);
       item.addEventListener('click', function (e) {
         e.stopPropagation();
         closeContextMenu();
@@ -373,14 +379,14 @@
     }
 
     // View content
-    menu.appendChild(menuItem('View content', function () {
+    menu.appendChild(menuItem('◧', 'View content', function () {
       const card = state.cards[id];
       const content = (card && card.content) || '';
       showContentPopup(id, content);
     }));
 
     // Metadata
-    menu.appendChild(menuItem('Metadata', function () {
+    menu.appendChild(menuItem('ℹ', 'Metadata', function () {
       const existing = cardEl.querySelector('.card-metadata-popup');
       if (existing) { existing.remove(); return; }
 
@@ -460,14 +466,19 @@
     }));
 
     // Copy ID
-    menu.appendChild(menuItem('Copy ID', function () {
+    menu.appendChild(menuItem('⎘', 'Copy ID', function () {
       navigator.clipboard.writeText(id);
+    }));
+
+    // Open file in editor
+    menu.appendChild(menuItem('↗', 'Open file', function () {
+      vscode.postMessage({ type: 'openCardFile', id: id });
     }));
 
     menu.appendChild(divider());
 
     // Delete
-    menu.appendChild(menuItem('Delete', function () {
+    menu.appendChild(menuItem('✕', 'Delete', function () {
       showDeleteConfirm(id, cardEl);
     }, true));
 

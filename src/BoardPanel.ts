@@ -254,6 +254,13 @@ export class BoardPanel {
         break;
       }
 
+      // ── Open card file ──────────────────────────────────────────────────────
+      case 'openCardFile': {
+        const cardPath = vscode.Uri.file(`${this._boardRoot}/cards/${msg.id}.md`);
+        vscode.window.showTextDocument(cardPath);
+        break;
+      }
+
       // ── Archive done ────────────────────────────────────────────────────────
       // Done cards are discovered by loading state (scanning card files).
       case 'archiveDone': {

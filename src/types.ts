@@ -48,7 +48,8 @@ export type WebviewMessage =
   | { type: 'saveCard'; id: string; content: string }
   | { type: 'deleteCard'; id: string }
   | { type: 'moveCard'; id: string; fromColumn: string; toColumn: string; toIndex: number }
-  | { type: 'archiveDone' };
+  | { type: 'archiveDone' }
+  | { type: 'openCardFile'; id: string };
 
 // Messages from extension → webview
 export type ExtensionMessage =
