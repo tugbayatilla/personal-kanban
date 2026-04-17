@@ -47,6 +47,12 @@ body {
   flex-shrink: 0;
 }
 
+.column-header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .column-title {
   font-weight: 600;
   font-size: 13px;
@@ -505,4 +511,83 @@ body {
 .board-error {
   padding: 24px;
   color: var(--vscode-errorForeground, #cc3333);
+}
+
+.policy-pill {
+  border: none;
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 16px;
+  opacity: 0.7;
+  transition: opacity 0.1s;
+}
+
+.policy-pill:hover {
+  opacity: 1;
+}
+
+.policy-pill--board {
+  background: var(--vscode-badge-background, rgba(128,128,128,0.4));
+  color: var(--vscode-badge-foreground, var(--vscode-foreground));
+}
+
+.policy-pill--column {
+  background: var(--vscode-statusBarItem-warningBackground, rgba(200,140,0,0.25));
+  color: var(--vscode-statusBarItem-warningForeground, var(--vscode-foreground));
+}
+
+.policy-popover {
+  position: absolute;
+  top: 44px;
+  left: 10px;
+  right: 10px;
+  z-index: 200;
+  background: var(--vscode-editorHoverWidget-background, #252526);
+  border: 1px solid var(--vscode-editorHoverWidget-border, #454545);
+  border-radius: 6px;
+  padding: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+
+.policy-popover-heading {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--vscode-descriptionForeground, rgba(128,128,128,0.8));
+  margin-bottom: 8px;
+}
+
+.policy-popover-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
+  border-top: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.2));
+}
+
+.policy-popover-item:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.policy-popover-key {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--vscode-editor-font-family, monospace);
+  color: var(--vscode-foreground);
+}
+
+.policy-popover-desc {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground, rgba(128,128,128,0.8));
+  line-height: 1.4;
+}
+
+.policy-popover-desc--undef {
+  font-style: italic;
+  opacity: 0.6;
 }

@@ -98,7 +98,24 @@
       : String(cardIds.length);
 
     header.appendChild(titleSpan);
-    header.appendChild(countSpan);
+
+    const headerRight = document.createElement('div');
+    headerRight.className = 'column-header-right';
+
+    // Board-level policy pill (same for every column)
+    const boardPolicies = state.manifest.board_policies || [];
+    if (boardPolicies.length > 0) {
+      headerRight.appendChild(renderPolicyPill(boardPolicies, 'board', colEl));
+    }
+
+    // Column-level policy pill
+    const colPolicies = Array.isArray(col.policies) ? col.policies : [];
+    if (colPolicies.length > 0) {
+      headerRight.appendChild(renderPolicyPill(colPolicies, 'column', colEl));
+    }
+
+    headerRight.appendChild(countSpan);
+    header.appendChild(headerRight);
     colEl.appendChild(header);
 
     // Archive all button for done column
@@ -338,6 +355,72 @@
     });
 
     return div;
+  }
+
+  // ── Policy pills ────────────────────────────────────────────────────────────
+
+  function renderPolicyPill(policyKeys, scope, colEl) {
+    const pill = document.createElement('button');
+    pill.className = 'policy-pill policy-pill--' + scope;
+    pill.title = (scope === 'board' ? 'Board policies' : 'Column policies') + ' — click to view';
+    pill.textContent = '\uD83D\uDD12 ' + policyKeys.length;
+
+    pill.addEventListener('click', function (e) {
+      e.stopPropagation();
+      const existing = colEl.querySelector('.policy-popover');
+      if (existing) { existing.remove(); return; }
+      colEl.appendChild(showPolicyPopover(policyKeys, scope, colEl));
+    });
+
+    return pill;
+  }
+
+  function showPolicyPopover(policyKeys, scope, colEl) {
+    const registry = (state.manifest.policies) || {};
+
+    const popover = document.createElement('div');
+    popover.className = 'policy-popover';
+
+    const heading = document.createElement('div');
+    heading.className = 'policy-popover-heading';
+    heading.textContent = scope === 'board' ? 'Board policies' : 'Column policies';
+    popover.appendChild(heading);
+
+    policyKeys.forEach(function (key) {
+      const def = registry[key];
+      const item = document.createElement('div');
+      item.className = 'policy-popover-item';
+
+      const keyEl = document.createElement('span');
+      keyEl.className = 'policy-popover-key';
+      keyEl.textContent = key;
+      item.appendChild(keyEl);
+
+      if (def && def.description) {
+        const descEl = document.createElement('span');
+        descEl.className = 'policy-popover-desc';
+        descEl.textContent = def.description;
+        item.appendChild(descEl);
+      } else {
+        const undefEl = document.createElement('span');
+        undefEl.className = 'policy-popover-desc policy-popover-desc--undef';
+        undefEl.textContent = '(no description — define in manifest.json)';
+        item.appendChild(undefEl);
+      }
+
+      popover.appendChild(item);
+    });
+
+    setTimeout(function () {
+      document.addEventListener('click', function closePop(ev) {
+        if (!popover.contains(ev.target)) {
+          popover.remove();
+          document.removeEventListener('click', closePop);
+        }
+      });
+    }, 0);
+
+    return popover;
   }
 
   // ── Context menu ────────────────────────────────────────────────────────────
