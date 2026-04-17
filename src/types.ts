@@ -1,8 +1,11 @@
 export interface Column {
   id: string;
   label: string;
+  index: number;
   wip_limit: number | null;
-  cards: string[];
+  rules: Record<string, unknown>;
+  // In-memory only: assembled from card files on load, not stored in manifest.json
+  cards?: string[];
 }
 
 export interface Script {
@@ -21,7 +24,10 @@ export interface Manifest {
 }
 
 export interface CardMetadata {
+  id?: string;
   created_at: string;
+  column?: string;       // Which column this card belongs to (default: first column / backlog)
+  order?: string;        // Sort order within column (ISO timestamp; lower = earlier)
   active_at?: string;
   done_at?: string;
   branch?: string;

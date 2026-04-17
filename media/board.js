@@ -389,7 +389,7 @@
       function metaRow(label, value) {
         return '<div><span class="meta-label">' + escHtml(label) + '</span>' + escHtml(value || '\u2014') + '</div>';
       }
-      const knownKeys = ['created_at', 'active_at', 'done_at', 'branch', 'archived_at'];
+      const knownKeys = ['created_at', 'column', 'order', 'active_at', 'done_at', 'branch', 'archived_at'];
       let rows = metaRow('id:', id) +
         metaRow('created:', meta.created_at ? new Date(meta.created_at).toLocaleString() : '') +
         (meta.active_at ? metaRow('active:', new Date(meta.active_at).toLocaleString()) : '') +

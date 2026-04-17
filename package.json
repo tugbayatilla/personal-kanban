@@ -2,7 +2,7 @@
   "name": "personal-kanban",
   "displayName": "Personal Kanban",
   "description": "File-based personal kanban board for VSCode",
-  "version": "0.0.38",
+  "version": "1.0.0",
   "publisher": "TGBY",
   "engines": {
     "vscode": "^1.85.0"
@@ -54,36 +54,6 @@
               "weight"
             ],
             "additionalProperties": false
-          }
-        },
-        "personal-kanban.scripts": {
-          "type": "object",
-          "default": {},
-          "description": "Script definitions used by hooks. Each key is a script name; value is an object with a `file` path (relative to the board folder).",
-          "additionalProperties": {
-            "type": "object",
-            "properties": {
-              "file": {
-                "type": "string",
-                "description": "Path to the Node.js script, relative to the board folder (e.g. \"scripts/card-moved.js\")"
-              }
-            },
-            "required": [
-              "file"
-            ],
-            "additionalProperties": false
-          }
-        },
-        "personal-kanban.hooks": {
-          "type": "object",
-          "default": {},
-          "description": "Event hooks. Each key is an event name (e.g. `card.moved`); value is an array of script names defined in `personal-kanban.scripts`.",
-          "additionalProperties": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "description": "Script name (must be a key in personal-kanban.scripts)"
-            }
           }
         },
         "personal-kanban.tagColorTarget": {
