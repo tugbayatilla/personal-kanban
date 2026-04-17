@@ -295,6 +295,13 @@ export class BoardPanel {
         break;
       }
 
+      // ── Open manifest file ──────────────────────────────────────────────────
+      case 'openManifestFile': {
+        const manifestPath = vscode.Uri.file(`${this._boardRoot}/manifest.json`);
+        vscode.window.showTextDocument(manifestPath);
+        break;
+      }
+
       // ── Archive done ────────────────────────────────────────────────────────
       // Done cards are discovered by loading state (scanning card files).
       case 'archiveDone': {
@@ -374,7 +381,10 @@ export class BoardPanel {
 <link rel="stylesheet" href="${cssUri}">
 </head>
 <body>
-<div id="board"></div>
+<div id="board-root">
+  <div id="board-header"></div>
+  <div id="board"></div>
+</div>
 <script src="${scriptUri}"></script>
 </body>
 </html>`;

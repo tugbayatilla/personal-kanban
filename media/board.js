@@ -49,9 +49,17 @@
 
   function render() {
     const board = document.getElementById('board');
+    const header = document.getElementById('board-header');
     if (!state || !state.manifest) {
       board.innerHTML = '<div class="board-error">Board not initialized. Run <strong>Kanban: Init Board</strong> first.</div>';
+      if (header) header.innerHTML = '';
       return;
+    }
+
+    // Render board header
+    if (header) {
+      header.innerHTML = '';
+      renderBoardHeader(header);
     }
 
     // Save scroll positions
@@ -355,6 +363,162 @@
     });
 
     return div;
+  }
+
+  // ── Board header ─────────────────────────────────────────────────────────────
+
+  function renderBoardHeader(headerEl) {
+    const nameEl = document.createElement('span');
+    nameEl.className = 'board-name';
+    nameEl.textContent = state.manifest.name || 'Kanban Board';
+    headerEl.appendChild(nameEl);
+
+    const actions = document.createElement('div');
+    actions.className = 'board-header-actions';
+
+    // Info button
+    const infoBtn = document.createElement('button');
+    infoBtn.className = 'board-header-btn';
+    infoBtn.title = 'Board information — policies, scripts, hooks';
+    infoBtn.textContent = '\u2139\uFE0F Board info';
+    infoBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      const existing = document.getElementById('board-info-popover');
+      if (existing) { existing.remove(); return; }
+      document.body.appendChild(showBoardInfoPopover());
+    });
+    actions.appendChild(infoBtn);
+
+    // Open manifest button
+    const manifestBtn = document.createElement('button');
+    manifestBtn.className = 'board-header-btn';
+    manifestBtn.title = 'Open manifest.json in editor';
+    manifestBtn.textContent = '\uD83D\uDCC4 manifest.json';
+    manifestBtn.addEventListener('click', function () {
+      vscode.postMessage({ type: 'openManifestFile' });
+    });
+    actions.appendChild(manifestBtn);
+
+    headerEl.appendChild(actions);
+  }
+
+  function showBoardInfoPopover() {
+    const manifest = state.manifest;
+    const registry = manifest.policies || {};
+
+    const popover = document.createElement('div');
+    popover.id = 'board-info-popover';
+    popover.className = 'board-info-popover';
+
+    function section(title, buildFn) {
+      const sec = document.createElement('div');
+      sec.className = 'board-info-section';
+      const titleEl = document.createElement('div');
+      titleEl.className = 'board-info-section-title';
+      titleEl.textContent = title;
+      sec.appendChild(titleEl);
+      buildFn(sec);
+      popover.appendChild(sec);
+    }
+
+    function infoRow(key, val, parentEl) {
+      const row = document.createElement('div');
+      row.className = 'board-info-row';
+      const keyEl = document.createElement('span');
+      keyEl.className = 'board-info-key';
+      keyEl.textContent = key;
+      row.appendChild(keyEl);
+      if (val) {
+        const valEl = document.createElement('span');
+        valEl.className = 'board-info-val';
+        valEl.textContent = val;
+        row.appendChild(valEl);
+      }
+      parentEl.appendChild(row);
+    }
+
+    function emptyNote(text, parentEl) {
+      const el = document.createElement('div');
+      el.className = 'board-info-empty';
+      el.textContent = text;
+      parentEl.appendChild(el);
+    }
+
+    // Board Policies
+    const boardPolicies = manifest.board_policies || [];
+    section('Board Policies', function (sec) {
+      if (boardPolicies.length === 0) {
+        emptyNote('No board-wide policies defined.', sec);
+      } else {
+        boardPolicies.forEach(function (key) {
+          const def = registry[key];
+          infoRow(key, def ? def.description : '(no description)', sec);
+        });
+      }
+    });
+
+    // Policy Bypass Tags
+    const bypassTags = manifest.policy_bypass_tags || [];
+    section('Policy Bypass Tags', function (sec) {
+      if (bypassTags.length === 0) {
+        emptyNote('No bypass tags configured.', sec);
+      } else {
+        bypassTags.forEach(function (tag) {
+          infoRow('#' + tag, null, sec);
+        });
+      }
+    });
+
+    // Scripts
+    const scripts = manifest.scripts || {};
+    const scriptKeys = Object.keys(scripts);
+    section('Scripts', function (sec) {
+      if (scriptKeys.length === 0) {
+        emptyNote('No scripts defined.', sec);
+      } else {
+        scriptKeys.forEach(function (key) {
+          infoRow(key, scripts[key].file, sec);
+        });
+      }
+    });
+
+    // Hooks
+    const hooks = manifest.hooks || {};
+    const hookKeys = Object.keys(hooks);
+    section('Hooks', function (sec) {
+      if (hookKeys.length === 0) {
+        emptyNote('No hooks configured.', sec);
+      } else {
+        hookKeys.forEach(function (event) {
+          infoRow(event, (hooks[event] || []).join(', '), sec);
+        });
+      }
+    });
+
+    // Open manifest action
+    const divider = document.createElement('div');
+    divider.className = 'board-info-divider';
+    popover.appendChild(divider);
+
+    const openBtn = document.createElement('button');
+    openBtn.className = 'board-info-open-manifest';
+    openBtn.textContent = '\uD83D\uDCC4 Open manifest.json';
+    openBtn.addEventListener('click', function () {
+      vscode.postMessage({ type: 'openManifestFile' });
+      popover.remove();
+    });
+    popover.appendChild(openBtn);
+
+    setTimeout(function () {
+      document.addEventListener('click', function closePop(ev) {
+        if (!popover.contains(ev.target)) {
+          popover.remove();
+          document.removeEventListener('click', closePop);
+        }
+      });
+    }, 0);
+
+    return popover;
   }
 
   // ── Policy pills ────────────────────────────────────────────────────────────
