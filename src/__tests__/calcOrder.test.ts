@@ -58,7 +58,7 @@ describe('calcOrder', () => {
   describe('repeated midpoint subdivision', () => {
     it('produces a strictly decreasing sequence of gaps after many insertions', () => {
       let low = 0;
-      let high = 1;
+      const high = 1;
       const orders: number[] = [];
 
       // Simulate 10 cards each appended to the bottom.

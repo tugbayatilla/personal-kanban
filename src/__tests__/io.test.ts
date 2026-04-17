@@ -29,7 +29,7 @@ import {
   loadBoardState,
   withLock,
 } from '../io';
-import { Card, Manifest } from '../types';
+import { Card } from '../types';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -165,7 +165,6 @@ describe('writeCard + readCard round-trip', () => {
     const archiveDir = path.join(boardRoot, 'archive');
     fs.mkdirSync(archiveDir, { recursive: true });
 
-    const card = makeCard('archived-01', { archived_at: '2024-02-01T00:00:00.000Z' });
     const content = `---\nid: archived-01\ncreated_at: 2024-01-15T10:00:00.000Z\ncolumn: done\narchived_at: 2024-02-01T00:00:00.000Z\n---\n\n# Task archived-01\n`;
     fs.writeFileSync(path.join(archiveDir, 'archived-01.md'), content);
 

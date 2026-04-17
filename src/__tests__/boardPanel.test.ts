@@ -95,7 +95,7 @@ async function callHandler(
   msg: WebviewMessage
 ): Promise<void> {
   // Lazy-require so the test module resolution uses the active mock registry.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { BoardPanel } = require('../BoardPanel') as typeof import('../BoardPanel');
 
   const fakeWebviewPanel = {
@@ -149,7 +149,7 @@ describe('BoardPanel message handler', () => {
     removeTempDir(workspaceRoot);
     // Reset static currentPanel reference so tests are isolated.
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { BoardPanel } = require('../BoardPanel') as typeof import('../BoardPanel');
       (BoardPanel as { currentPanel: unknown }).currentPanel = undefined;
     } catch {

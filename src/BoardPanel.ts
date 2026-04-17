@@ -5,7 +5,6 @@ import {
   readCard,
   writeCard,
   archiveCardFile,
-  writeManifest,
   deleteCardFile,
   generateId,
   loadBoardState,
@@ -101,7 +100,7 @@ export class BoardPanel {
         const now = new Date().toISOString();
 
         this._suppressWatch();
-        const { newCard, manifest } = withLock(this._boardRoot, () => {
+        const { manifest } = withLock(this._boardRoot, () => {
           const { manifest, cards } = loadBoardState(this._boardRoot);
           const col = manifest.columns.find((c) => c.id === msg.columnId);
           const colCards = col?.cards ?? [];
@@ -122,7 +121,7 @@ export class BoardPanel {
             },
           };
           writeCard(this._boardRoot, card);
-          return { newCard: card, manifest };
+          return { manifest };
         });
 
         fireHook(this._boardRoot, manifest, 'card.created', {
