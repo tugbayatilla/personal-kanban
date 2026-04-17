@@ -13,6 +13,10 @@ function log(line: string): void {
   _channel?.appendLine(`[${new Date().toISOString()}] ${line}`);
 }
 
+export function logInfo(line: string): void {
+  log(line);
+}
+
 export function extractTitle(content: string): string {
   for (const line of content.split('\n')) {
     if (line.startsWith('# ')) {

@@ -12,7 +12,7 @@ import {
   calcOrder,
 } from './io';
 import { Card, WebviewMessage } from './types';
-import { fireHook, runPolicyScript, extractTitle } from './hooks';
+import { fireHook, runPolicyScript, logInfo, extractTitle } from './hooks';
 
 export class BoardPanel {
   public static currentPanel: BoardPanel | undefined;
@@ -199,11 +199,15 @@ export class BoardPanel {
           to_column_wip_limit: dstColPre?.wip_limit ?? null,
         };
         const bypassTags = preManifest.policy_bypass_tags ?? [];
-        const cardBypasses = bypassTags.length > 0 && preCard
+        const bypassedBy = bypassTags.length > 0 && preCard
           ? cardHasBypassTag(preCard.content, bypassTags)
-          : false;
+          : null;
 
-        const violations = cardBypasses
+        if (bypassedBy) {
+          logInfo(`[policy.bypassed] card=${msg.id} tag=#${bypassedBy} from=${msg.fromColumn} to=${msg.toColumn} — all policy checks skipped`);
+        }
+
+        const violations = bypassedBy
           ? []
           : await checkPolicies(this._boardRoot, preManifest, msg.fromColumn, msg.toColumn, basePayload);
 
@@ -380,13 +384,13 @@ export class BoardPanel {
 // ── Policy bypass ─────────────────────────────────────────────────────────────
 
 /**
- * Returns true if the card content contains any of the configured bypass tags.
+ * Returns the first matching bypass tag found in the card content, or null if none.
  * Tags in content are written as #tagname; bypass tags in config are stored without #.
  */
-function cardHasBypassTag(content: string, bypassTags: string[]): boolean {
+function cardHasBypassTag(content: string, bypassTags: string[]): string | null {
   const found = content.match(/#([\w-]+)/g) ?? [];
   const cardTags = found.map((t) => t.slice(1).toLowerCase());
-  return bypassTags.some((t) => cardTags.includes(t.toLowerCase()));
+  return bypassTags.find((t) => cardTags.includes(t.toLowerCase())) ?? null;
 }
 
 // ── Policy checking ───────────────────────────────────────────────────────────
