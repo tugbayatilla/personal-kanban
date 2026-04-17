@@ -58,22 +58,24 @@ function initBoard(context: vscode.ExtensionContext): void {
       ],
       tags: {},
       scripts: {
-        'card-reviewed':  { file: 'scripts/card-reviewed.js' },
-        'wip-alert':      { file: 'scripts/wip-alert.js' },
-        'card-created':   { file: 'scripts/card-created.js' },
-        'card-edited':    { file: 'scripts/card-edited.js' },
-        'card-deleted':   { file: 'scripts/card-deleted.js' },
-        'card-moved':     { file: 'scripts/card-moved.js' },
-        'cards-archived': { file: 'scripts/cards-archived.js' },
+        'policy-violation': { file: 'scripts/policy-violation.js' },
+        'wip-alert':        { file: 'scripts/wip-alert.js' },
+        'card-created':     { file: 'scripts/card-created.js' },
+        'card-edited':      { file: 'scripts/card-edited.js' },
+        'card-deleted':     { file: 'scripts/card-deleted.js' },
+        'card-moved':       { file: 'scripts/card-moved.js' },
+        'card-reviewed':    { file: 'scripts/card-reviewed.js' },
+        'card-done':        { file: 'scripts/card-done.js' },
+        'cards-archived':   { file: 'scripts/cards-archived.js' },
       },
       hooks: {
-        'card.reviewed':  ['card-reviewed'],
-        'wip.violated':   ['wip-alert'],
-        'card.created':   ['card-created'],
-        'card.edited':    ['card-edited'],
-        'card.deleted':   ['card-deleted'],
-        'card.moved':     ['card-moved'],
-        'cards.archived': ['cards-archived'],
+        'policy.violated': ['policy-violation'],
+        'wip.violated':    ['wip-alert'],
+        'card.created':    ['card-created'],
+        'card.edited':     ['card-edited'],
+        'card.deleted':    ['card-deleted'],
+        'card.moved':      ['card-moved', 'card-reviewed', 'card-done'],
+        'cards.archived':  ['cards-archived'],
       },
       tagColorTarget: 'tag',
     };
@@ -83,14 +85,15 @@ function initBoard(context: vscode.ExtensionContext): void {
   const writeIfMissing = (filePath: string, content: string) => {
     if (!fs.existsSync(filePath)) fs.writeFileSync(filePath, content);
   };
-  writeIfMissing(path.join(boardRoot, 'scripts', 'lib.js'),            SCRIPT_LIB);
-  writeIfMissing(path.join(boardRoot, 'scripts', 'card-reviewed.js'),  SCRIPT_CARD_REVIEWED);
-  writeIfMissing(path.join(boardRoot, 'scripts', 'wip-alert.js'),      SCRIPT_WIP_ALERT);
-  writeIfMissing(path.join(boardRoot, 'scripts', 'card-created.js'),   SCRIPT_CARD_CREATED);
-  writeIfMissing(path.join(boardRoot, 'scripts', 'card-edited.js'),    SCRIPT_CARD_EDITED);
-  writeIfMissing(path.join(boardRoot, 'scripts', 'card-deleted.js'),   SCRIPT_CARD_DELETED);
-  writeIfMissing(path.join(boardRoot, 'scripts', 'card-moved.js'),     SCRIPT_CARD_MOVED);
-  writeIfMissing(path.join(boardRoot, 'scripts', 'cards-archived.js'), SCRIPT_CARDS_ARCHIVED);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'lib.js'),               SCRIPT_LIB);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'card-reviewed.js'),     SCRIPT_CARD_REVIEWED);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'wip-alert.js'),         SCRIPT_WIP_ALERT);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'card-created.js'),      SCRIPT_CARD_CREATED);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'card-edited.js'),       SCRIPT_CARD_EDITED);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'card-deleted.js'),      SCRIPT_CARD_DELETED);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'card-moved.js'),        SCRIPT_CARD_MOVED);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'cards-archived.js'),    SCRIPT_CARDS_ARCHIVED);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'policy-violation.js'),  SCRIPT_POLICY_VIOLATION);
 
   const guidelinesTemplate = path.join(context.extensionPath, 'resources', 'GUIDELINES.md');
   fs.writeFileSync(path.join(boardRoot, 'GUIDELINES.md'), fs.readFileSync(guidelinesTemplate, 'utf8'));
@@ -350,5 +353,29 @@ const { readPayload } = require('./lib');
 
 readPayload('cards-archived', ({ column }) => {
   process.stdout.write(\`cards archived from: \${column}\\n\`);
+});
+`;
+
+const SCRIPT_POLICY_VIOLATION = `#!/usr/bin/env node
+// Fires when a card move violates a board policy.
+//
+// Hook event: policy.violated
+// Payload: { event, timestamp, card_id, card_title, from_column, to_column, policy, message }
+//
+// policy values:
+//   "no-pullback"  — card moved backward in the value stream
+//   "entry:review" — card entered Review without meeting entry criteria
+//   "entry:done"   — card entered Done without meeting entry criteria
+
+'use strict';
+
+const { readPayload, notify } = require('./lib');
+
+readPayload('policy-violation', ({ card_title, from_column, to_column, policy, message, notifications }) => {
+  const title = 'Kanban: Policy Violation';
+  const summary = \`[\${policy}] "\${card_title}" moved from \${from_column} → \${to_column}\`;
+
+  process.stderr.write(\`\${summary}\\n\${message}\\n\`);
+  if (notifications !== false) notify(title, \`\${summary}\\n\${message}\`);
 });
 `;

@@ -218,6 +218,19 @@ export class BoardPanel {
 
         if (movedCard) {
           const movedTitle = extractTitle(movedCard.content);
+
+          const violation = detectPolicyViolation(msg.fromColumn, msg.toColumn, manifest.columns.map((c) => c.id));
+          if (violation) {
+            fireHook(this._boardRoot, manifest, 'policy.violated', {
+              card_id: msg.id,
+              card_title: movedTitle,
+              from_column: msg.fromColumn,
+              to_column: msg.toColumn,
+              policy: violation.policy,
+              message: violation.message,
+            });
+          }
+
           fireHook(this._boardRoot, manifest, 'card.moved', {
             card_id: msg.id,
             card_title: movedTitle,
@@ -345,4 +358,50 @@ export class BoardPanel {
 </body>
 </html>`;
   }
+}
+
+// ── Policy violation detection ────────────────────────────────────────────────
+
+interface PolicyViolation {
+  policy: string;
+  message: string;
+}
+
+/**
+ * Column-specific entry policies (keyed by destination column id).
+ * These fire when a card enters a particular column regardless of where it came from.
+ */
+const COLUMN_POLICIES: Record<string, { policy: string; message: string }> = {
+  'review': {
+    policy: 'entry:review',
+    message: 'Cards entering Review must have all acceptance criteria met from the worker\'s perspective.',
+  },
+  'done': {
+    policy: 'entry:done',
+    message: 'Cards entering Done must have been verified by a second person (or the same person after a pause).',
+  },
+};
+
+export function detectPolicyViolation(
+  fromColumn: string,
+  toColumn: string,
+  columnOrder: string[]
+): PolicyViolation | null {
+  const fromIdx = columnOrder.indexOf(fromColumn);
+  const toIdx   = columnOrder.indexOf(toColumn);
+
+  // Global policy: pulling a card backward in the value stream.
+  if (fromIdx !== -1 && toIdx !== -1 && toIdx < fromIdx) {
+    return {
+      policy: 'no-pullback',
+      message: `Moving a card backward from "${fromColumn}" to "${toColumn}" is a policy violation. Add a note to the card explaining why instead.`,
+    };
+  }
+
+  // Column-specific entry policy.
+  if (COLUMN_POLICIES[toColumn]) {
+    return COLUMN_POLICIES[toColumn];
+  }
+
+  return null;
 }
