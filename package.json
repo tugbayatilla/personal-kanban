@@ -81,6 +81,11 @@
           "default": true,
           "description": "Enable hook script execution when board events occur (card moved, created, deleted, etc.)."
         },
+        "personal-kanban.notifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable OS system notifications for card events (moves, review requests, WIP limit alerts)."
+        },
         "personal-kanban.showCardAge": {
           "type": "boolean",
           "default": true,

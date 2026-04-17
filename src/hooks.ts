@@ -38,7 +38,8 @@ export function fireHook(
   event: string,
   payload: Record<string, unknown>
 ): void {
-  const enabled = vscode.workspace.getConfiguration('personal-kanban').get<boolean>('enableHooks', true);
+  const config = vscode.workspace.getConfiguration('personal-kanban');
+  const enabled = config.get<boolean>('enableHooks', true);
   if (!enabled) { return; }
 
   const scriptNames = manifest.hooks[event];
@@ -46,9 +47,11 @@ export function fireHook(
     return;
   }
 
+  const notifications = config.get<boolean>('notifications', true);
   const fullPayload = JSON.stringify({
     event,
     timestamp: new Date().toISOString(),
+    notifications,
     ...payload,
   });
 

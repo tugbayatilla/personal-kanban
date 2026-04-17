@@ -233,7 +233,7 @@ const SCRIPT_CARD_MOVED = `#!/usr/bin/env node
 const path = require('path');
 const { readPayload, notify, updateCardMetadata } = require('./lib');
 
-readPayload('card-moved', ({ card_id, card_title, from_column, to_column, branch, card_path }) => {
+readPayload('card-moved', ({ card_id, card_title, from_column, to_column, branch, card_path, notifications }) => {
   // Optionally re-write column (already done by the extension; shown here as an example).
   // if (card_path) {
   //   updateCardMetadata(card_path, { column: to_column });
@@ -243,7 +243,7 @@ readPayload('card-moved', ({ card_id, card_title, from_column, to_column, branch
     ? \`"\${card_title}" moved to Done — branch: \${branch}\`
     : \`"\${card_title}" moved to \${to_column}\`;
 
-  notify('Kanban: Card Moved', message);
+  if (notifications !== false) notify('Kanban: Card Moved', message);
   process.stdout.write(message + '\\n');
 });
 `;
@@ -258,12 +258,12 @@ const SCRIPT_CARD_REVIEWED = `#!/usr/bin/env node
 
 const { readPayload, notify } = require('./lib');
 
-readPayload('card-reviewed', ({ card_title, branch }) => {
+readPayload('card-reviewed', ({ card_title, branch, notifications }) => {
   const message = branch
     ? \`"\${card_title}" is ready for review — branch: \${branch}\`
     : \`"\${card_title}" is ready for review\`;
 
-  notify('Kanban: Ready for Review', message);
+  if (notifications !== false) notify('Kanban: Ready for Review', message);
   process.stdout.write(message + '\\n');
 });
 `;
@@ -278,10 +278,10 @@ const SCRIPT_WIP_ALERT = `#!/usr/bin/env node
 
 const { readPayload, notify } = require('./lib');
 
-readPayload('wip-alert', ({ column, wip_limit, current_count }) => {
+readPayload('wip-alert', ({ column, wip_limit, current_count, notifications }) => {
   const message = \`WIP limit exceeded in "\${column}": \${current_count} cards (limit: \${wip_limit})\`;
 
-  notify('Kanban WIP Alert', message);
+  if (notifications !== false) notify('Kanban WIP Alert', message);
   process.stdout.write(message + '\\n');
 });
 `;
