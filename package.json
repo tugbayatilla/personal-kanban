@@ -2,7 +2,7 @@
   "name": "personal-kanban",
   "displayName": "Personal Kanban",
   "description": "File-based personal kanban board for VSCode",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "publisher": "TGBY",
   "engines": {
     "vscode": "^1.85.0"
