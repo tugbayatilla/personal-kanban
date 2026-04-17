@@ -32,6 +32,61 @@ function formatPayloadContext(payload: Record<string, unknown>): string {
   return parts.length > 0 ? ` ${parts.join(' ')}` : '';
 }
 
+function runScript(
+  boardRoot: string,
+  scriptPath: string,
+  fullPayload: string,
+  logContext: string
+): Promise<number | null> {
+  return new Promise((resolve) => {
+    const absScript = path.resolve(boardRoot, scriptPath);
+    let child;
+    try {
+      child = spawn(process.execPath, [absScript], {
+        cwd: boardRoot,
+        stdio: ['pipe', 'ignore', 'ignore'],
+      });
+    } catch {
+      log(`[hook.failed] ${logContext} → ${scriptPath} (spawn error)`);
+      resolve(null);
+      return;
+    }
+
+    child.stdin.write(fullPayload);
+    child.stdin.end();
+
+    child.on('close', (code: number | null) => {
+      if (code === 0 || code === null) {
+        log(`[hook.fired] ${logContext} → ${scriptPath}`);
+      } else {
+        log(`[hook.failed] ${logContext} → ${scriptPath} (exit ${code})`);
+      }
+      resolve(code);
+    });
+
+    child.on('error', () => {
+      log(`[hook.failed] ${logContext} → ${scriptPath} (spawn error)`);
+      resolve(null);
+    });
+  });
+}
+
+/**
+ * Fire all scripts registered for an event in manifest.hooks[event].
+ *
+ * Execution model:
+ * - Scripts run sequentially in the order they appear in the manifest array.
+ * - Each script receives the full event payload as JSON on stdin.
+ * - If a script exits with a non-zero code, the chain stops immediately —
+ *   remaining scripts for this event are not spawned.
+ * - Exit code 0 (or null) is treated as success; the chain continues.
+ *
+ * This allows a guard script (e.g. policy-violation) to be placed first in
+ * the array so it can block downstream scripts by exiting with code 1.
+ *
+ * The function is fire-and-forget (returns void). The async chain runs in the
+ * background; callers do not need to await it.
+ */
 export function fireHook(
   boardRoot: string,
   manifest: Manifest,
@@ -55,42 +110,23 @@ export function fireHook(
     ...payload,
   });
 
-  const context = formatPayloadContext(payload);
+  const context = `${event}${formatPayloadContext(payload)}`;
 
-  for (const scriptName of scriptNames) {
-    const scriptDef = manifest.scripts?.[scriptName];
-    if (!scriptDef) {
-      log(`[hook.failed] ${event}${context} → ${scriptName} (not defined in manifest.scripts)`);
-      continue;
-    }
-    const scriptPath = scriptDef.file;
-    const absScript = path.resolve(boardRoot, scriptPath);
-    const cmd = process.execPath;
-    const args = [absScript];
-    let child;
-    try {
-      child = spawn(cmd, args, {
-        cwd: boardRoot,
-        stdio: ['pipe', 'ignore', 'ignore'],
-      });
-    } catch {
-      log(`[hook.failed] ${event}${context} → ${scriptPath} (spawn error)`);
-      continue;
-    }
-
-    child.stdin.write(fullPayload);
-    child.stdin.end();
-
-    child.on('close', (code: number | null) => {
-      if (code === 0) {
-        log(`[hook.fired] ${event}${context} → ${scriptPath}`);
-      } else {
-        log(`[hook.failed] ${event}${context} → ${scriptPath} (exit ${code ?? 'null'})`);
+  // Run scripts sequentially. A non-zero exit code stops the chain.
+  (async () => {
+    for (const scriptName of scriptNames) {
+      const scriptDef = manifest.scripts?.[scriptName];
+      if (!scriptDef) {
+        log(`[hook.failed] ${context} → ${scriptName} (not defined in manifest.scripts)`);
+        continue;
       }
-    });
 
-    child.on('error', () => {
-      log(`[hook.failed] ${event}${context} → ${scriptPath} (spawn error)`);
-    });
-  }
+      const code = await runScript(boardRoot, scriptDef.file, fullPayload, context);
+
+      if (code !== null && code !== 0) {
+        log(`[hook.stopped] ${context} → chain halted by ${scriptDef.file} (exit ${code})`);
+        break;
+      }
+    }
+  })();
 }
