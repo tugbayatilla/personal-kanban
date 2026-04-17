@@ -125,29 +125,6 @@ body {
   color: var(--vscode-descriptionForeground, rgba(128,128,128,0.6));
 }
 
-.board-info-divider {
-  height: 1px;
-  background: var(--vscode-widget-border, rgba(128,128,128,0.25));
-  margin: 10px 0;
-}
-
-.board-info-open-manifest {
-  width: 100%;
-  border: 1px dashed var(--vscode-widget-border, rgba(128,128,128,0.4));
-  background: transparent;
-  border-radius: 4px;
-  padding: 5px 10px;
-  font-size: 11px;
-  cursor: pointer;
-  color: var(--vscode-textLink-foreground, #4daafc);
-  text-align: left;
-  transition: all 0.15s;
-}
-
-.board-info-open-manifest:hover {
-  background: var(--vscode-list-hoverBackground);
-  border-color: var(--vscode-focusBorder, #007acc);
-}
 
 #board {
   display: flex;

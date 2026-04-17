@@ -110,12 +110,6 @@
     const headerRight = document.createElement('div');
     headerRight.className = 'column-header-right';
 
-    // Board-level policy pill (same for every column)
-    const boardPolicies = state.manifest.board_policies || [];
-    if (boardPolicies.length > 0) {
-      headerRight.appendChild(renderPolicyPill(boardPolicies, 'board', colEl));
-    }
-
     // Column-level policy pill
     const colPolicies = Array.isArray(col.policies) ? col.policies : [];
     if (colPolicies.length > 0) {
@@ -368,26 +362,79 @@
   // ── Board header ─────────────────────────────────────────────────────────────
 
   function renderBoardHeader(headerEl) {
+    const manifest = state.manifest;
+
     const nameEl = document.createElement('span');
     nameEl.className = 'board-name';
-    nameEl.textContent = state.manifest.name || 'Kanban Board';
+    nameEl.textContent = manifest.name || 'Kanban Board';
     headerEl.appendChild(nameEl);
 
     const actions = document.createElement('div');
     actions.className = 'board-header-actions';
 
-    // Info button
-    const infoBtn = document.createElement('button');
-    infoBtn.className = 'board-header-btn';
-    infoBtn.title = 'Board information — policies, scripts, hooks';
-    infoBtn.textContent = '\u2139\uFE0F Board info';
-    infoBtn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      const existing = document.getElementById('board-info-popover');
-      if (existing) { existing.remove(); return; }
-      document.body.appendChild(showBoardInfoPopover());
-    });
-    actions.appendChild(infoBtn);
+    // Board policies pill (moved from column headers)
+    const boardPolicies = manifest.board_policies || [];
+    if (boardPolicies.length > 0) {
+      const pill = document.createElement('button');
+      pill.className = 'policy-pill policy-pill--board';
+      pill.title = 'Board policies \u2014 click to view';
+      pill.textContent = '\uD83D\uDD12 ' + boardPolicies.length;
+      pill.addEventListener('click', function (e) {
+        e.stopPropagation();
+        toggleBoardPopover('board-policies-popover', function (pop) {
+          addPopoverSection(pop, 'Board Policies', function (sec) {
+            const registry = manifest.policies || {};
+            if (boardPolicies.length === 0) {
+              addInfoEmpty(sec, 'No board-wide policies defined.');
+            } else {
+              boardPolicies.forEach(function (key) {
+                const def = registry[key];
+                addInfoRow(sec, key, def ? def.description : '(no description)');
+              });
+            }
+          });
+        });
+      });
+      actions.appendChild(pill);
+    }
+
+    // Bypass tags button
+    actions.appendChild(makeBoardInfoBtn('\uD83C\uDFF7\uFE0F Bypass tags', 'Policy bypass tags', 'board-bypass-popover', function (pop) {
+      addPopoverSection(pop, 'Policy Bypass Tags', function (sec) {
+        const tags = manifest.policy_bypass_tags || [];
+        if (tags.length === 0) {
+          addInfoEmpty(sec, 'No bypass tags configured.');
+        } else {
+          tags.forEach(function (tag) { addInfoRow(sec, '#' + tag, null); });
+        }
+      });
+    }));
+
+    // Scripts button
+    actions.appendChild(makeBoardInfoBtn('\u2699\uFE0F Scripts', 'Scripts defined in manifest', 'board-scripts-popover', function (pop) {
+      addPopoverSection(pop, 'Scripts', function (sec) {
+        const scripts = manifest.scripts || {};
+        const keys = Object.keys(scripts);
+        if (keys.length === 0) {
+          addInfoEmpty(sec, 'No scripts defined.');
+        } else {
+          keys.forEach(function (key) { addInfoRow(sec, key, scripts[key].file); });
+        }
+      });
+    }));
+
+    // Hooks button
+    actions.appendChild(makeBoardInfoBtn('\u26A1 Hooks', 'Event hooks configured in manifest', 'board-hooks-popover', function (pop) {
+      addPopoverSection(pop, 'Hooks', function (sec) {
+        const hooks = manifest.hooks || {};
+        const keys = Object.keys(hooks);
+        if (keys.length === 0) {
+          addInfoEmpty(sec, 'No hooks configured.');
+        } else {
+          keys.forEach(function (key) { addInfoRow(sec, key, (hooks[key] || []).join(', ')); });
+        }
+      });
+    }));
 
     // Open manifest button
     const manifestBtn = document.createElement('button');
@@ -402,113 +449,27 @@
     headerEl.appendChild(actions);
   }
 
-  function showBoardInfoPopover() {
-    const manifest = state.manifest;
-    const registry = manifest.policies || {};
+  function makeBoardInfoBtn(label, title, popoverId, buildFn) {
+    const btn = document.createElement('button');
+    btn.className = 'board-header-btn';
+    btn.title = title;
+    btn.textContent = label;
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      toggleBoardPopover(popoverId, buildFn);
+    });
+    return btn;
+  }
 
+  function toggleBoardPopover(id, buildFn) {
+    const existing = document.getElementById(id);
+    document.querySelectorAll('.board-info-popover').forEach(function (el) { el.remove(); });
+    if (existing) return; // was open — toggled off
     const popover = document.createElement('div');
-    popover.id = 'board-info-popover';
+    popover.id = id;
     popover.className = 'board-info-popover';
-
-    function section(title, buildFn) {
-      const sec = document.createElement('div');
-      sec.className = 'board-info-section';
-      const titleEl = document.createElement('div');
-      titleEl.className = 'board-info-section-title';
-      titleEl.textContent = title;
-      sec.appendChild(titleEl);
-      buildFn(sec);
-      popover.appendChild(sec);
-    }
-
-    function infoRow(key, val, parentEl) {
-      const row = document.createElement('div');
-      row.className = 'board-info-row';
-      const keyEl = document.createElement('span');
-      keyEl.className = 'board-info-key';
-      keyEl.textContent = key;
-      row.appendChild(keyEl);
-      if (val) {
-        const valEl = document.createElement('span');
-        valEl.className = 'board-info-val';
-        valEl.textContent = val;
-        row.appendChild(valEl);
-      }
-      parentEl.appendChild(row);
-    }
-
-    function emptyNote(text, parentEl) {
-      const el = document.createElement('div');
-      el.className = 'board-info-empty';
-      el.textContent = text;
-      parentEl.appendChild(el);
-    }
-
-    // Board Policies
-    const boardPolicies = manifest.board_policies || [];
-    section('Board Policies', function (sec) {
-      if (boardPolicies.length === 0) {
-        emptyNote('No board-wide policies defined.', sec);
-      } else {
-        boardPolicies.forEach(function (key) {
-          const def = registry[key];
-          infoRow(key, def ? def.description : '(no description)', sec);
-        });
-      }
-    });
-
-    // Policy Bypass Tags
-    const bypassTags = manifest.policy_bypass_tags || [];
-    section('Policy Bypass Tags', function (sec) {
-      if (bypassTags.length === 0) {
-        emptyNote('No bypass tags configured.', sec);
-      } else {
-        bypassTags.forEach(function (tag) {
-          infoRow('#' + tag, null, sec);
-        });
-      }
-    });
-
-    // Scripts
-    const scripts = manifest.scripts || {};
-    const scriptKeys = Object.keys(scripts);
-    section('Scripts', function (sec) {
-      if (scriptKeys.length === 0) {
-        emptyNote('No scripts defined.', sec);
-      } else {
-        scriptKeys.forEach(function (key) {
-          infoRow(key, scripts[key].file, sec);
-        });
-      }
-    });
-
-    // Hooks
-    const hooks = manifest.hooks || {};
-    const hookKeys = Object.keys(hooks);
-    section('Hooks', function (sec) {
-      if (hookKeys.length === 0) {
-        emptyNote('No hooks configured.', sec);
-      } else {
-        hookKeys.forEach(function (event) {
-          infoRow(event, (hooks[event] || []).join(', '), sec);
-        });
-      }
-    });
-
-    // Open manifest action
-    const divider = document.createElement('div');
-    divider.className = 'board-info-divider';
-    popover.appendChild(divider);
-
-    const openBtn = document.createElement('button');
-    openBtn.className = 'board-info-open-manifest';
-    openBtn.textContent = '\uD83D\uDCC4 Open manifest.json';
-    openBtn.addEventListener('click', function () {
-      vscode.postMessage({ type: 'openManifestFile' });
-      popover.remove();
-    });
-    popover.appendChild(openBtn);
-
+    buildFn(popover);
+    document.body.appendChild(popover);
     setTimeout(function () {
       document.addEventListener('click', function closePop(ev) {
         if (!popover.contains(ev.target)) {
@@ -517,8 +478,40 @@
         }
       });
     }, 0);
+  }
 
-    return popover;
+  function addPopoverSection(pop, title, buildFn) {
+    const sec = document.createElement('div');
+    sec.className = 'board-info-section';
+    const titleEl = document.createElement('div');
+    titleEl.className = 'board-info-section-title';
+    titleEl.textContent = title;
+    sec.appendChild(titleEl);
+    buildFn(sec);
+    pop.appendChild(sec);
+  }
+
+  function addInfoRow(parentEl, key, val) {
+    const row = document.createElement('div');
+    row.className = 'board-info-row';
+    const keyEl = document.createElement('span');
+    keyEl.className = 'board-info-key';
+    keyEl.textContent = key;
+    row.appendChild(keyEl);
+    if (val) {
+      const valEl = document.createElement('span');
+      valEl.className = 'board-info-val';
+      valEl.textContent = val;
+      row.appendChild(valEl);
+    }
+    parentEl.appendChild(row);
+  }
+
+  function addInfoEmpty(parentEl, text) {
+    const el = document.createElement('div');
+    el.className = 'board-info-empty';
+    el.textContent = text;
+    parentEl.appendChild(el);
   }
 
   // ── Policy pills ────────────────────────────────────────────────────────────
