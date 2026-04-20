@@ -20,6 +20,8 @@ Work moves left → right through the value stream. Each column has a distinct m
 
 **Queues** (Backlog, Refined) accumulate demand. **Active** columns should always respect WIP limits.
 
+Column ids, labels, order, and WIP limits are all defined in `manifest.json` under `columns`. The board renders whatever is there — no column names are hard-coded in the extension.
+
 ---
 
 ## WIP Limits
@@ -31,6 +33,28 @@ WIP (Work In Progress) limits are the core control mechanism of Kanban. They mak
 - Limits are enforced via the `wip-limit` board policy → `scripts/policy-wip-limit.js`.
 
 **When a WIP limit is hit, stop starting. Start finishing.**
+
+---
+
+## Column Stamps
+
+Two card metadata timestamps are written automatically when a card enters specific columns. Which columns trigger them is configured in `manifest.json` under `column_stamps`:
+
+```json
+"column_stamps": {
+  "active_at": "in-progress",
+  "done_at": "done"
+}
+```
+
+| Field | Behaviour |
+|-------|-----------|
+| `active_at` | Stamped the **first time** a card enters the configured column. Never overwritten on subsequent moves back. |
+| `done_at` | Stamped **every time** a card enters the configured column. |
+
+These values are used by flow metrics tools to calculate cycle time and lead time. To disable a stamp, remove its key. To point it at a different column, change the value to any valid column id.
+
+The archive operation (see [Archiving](#archiving)) also uses `column_stamps.done_at` to determine which column to sweep — so changing the done column id here updates both behaviours at once.
 
 ---
 
@@ -83,21 +107,30 @@ To add a policy: add it to the `policies` registry, then reference its key in `b
 
 Policy scripts receive this payload on stdin:
 
-```json
-{
-  "event": "card.moving",
-  "card_id": "...",
-  "card_title": "...",
-  "from_column": "...",
-  "to_column": "...",
-  "to_column_card_count": 2,
-  "to_column_wip_limit": 3,
-  "columns": ["backlog", "refined", "in-progress", "review", "done"],
-  "policy": "no-pullback"
-}
-```
+| Field | Type | Description |
+|-------|------|-------------|
+| `event` | string | Always `"card.moving"` |
+| `timestamp` | string | ISO 8601 datetime of the move attempt |
+| `card_id` | string | Card file id (e.g. `"20260101-a1b2"`) |
+| `card_title` | string | First `# heading` from the card content |
+| `from_column` | string | Column id the card is leaving |
+| `to_column` | string | Column id the card is entering |
+| `to_column_card_count` | number | Current number of cards in the destination column |
+| `to_column_wip_limit` | number\|null | WIP limit of the destination column, or `null` if unset |
+| `columns` | string[] | Ordered array of all column ids (left → right) |
+| `policy` | string | Key of the policy being checked (e.g. `"entry:done"`) |
 
 The `columns` array gives scripts the full column order so they can determine move direction without reading the manifest. Use `readPayload` from `lib.js` to parse the payload.
+
+```js
+const { readPayload, readCard } = require('./lib');
+const path = require('path');
+
+readPayload('my-policy', ({ card_id, from_column, to_column, columns }) => {
+  // exit 0 = ok, exit 1 = violated
+  process.exit(0);
+});
+```
 
 ### Bypassing Policies
 
@@ -125,8 +158,8 @@ Track these to understand and improve the system over time.
 
 | Metric | What it tells you |
 |--------|------------------|
-| **Cycle time** | Time from In Progress → Done. Measures delivery speed. |
-| **Lead time** | Time from Backlog → Done. Measures end-to-end responsiveness. |
+| **Cycle time** | Time from `active_at` → `done_at`. Measures delivery speed. |
+| **Lead time** | Time from `created_at` → `done_at`. Measures end-to-end responsiveness. |
 | **Throughput** | Cards completed per week. Measures sustainable pace. |
 | **Queue age** | How long cards sit in Refined without being pulled. Reveals over-commitment or poor refinement. |
 
@@ -173,23 +206,88 @@ Tags describe the nature of the work. Use one primary tag per card.
 
 ## Automation & Hooks
 
-Scripts in `scripts/` fire automatically in response to board events. They are for notifications and policy enforcement — not for tracking state outside the board.
+Scripts in `scripts/` fire automatically in response to board events. They are for notifications and post-move side effects — not for tracking state outside the board.
 
 | Hook event | Script | Fires when |
 |------------|--------|------------|
-| `policy.overridden` | `policy-overridden.js` | A policy was violated, user approved, move proceeded |
 | `card.created` | `card-created.js` | A new card is created |
-| `card.moved` | `card-moved.js` | A card changes column (handles Review and Done notifications too) |
 | `card.edited` | `card-edited.js` | A card's content changes |
 | `card.deleted` | `card-deleted.js` | A card is deleted |
+| `card.moved` | `card-moved.js` | A card changes column |
+| `policy.overridden` | `policy-overridden.js` | A policy was violated, user approved, move proceeded |
 | `cards.archived` | `cards-archived.js` | Done cards are archived |
 
-The `policy.overridden` payload includes `policy` (the key from the registry) and `message` (the human-readable explanation).
+Scripts receive a JSON payload via stdin. Shared helpers are in `scripts/lib.js`. Use `readPayload` to parse stdin and `readCard` / `updateCardMetadata` for card file access.
 
-Scripts receive a JSON payload via stdin. Shared helpers are in `scripts/lib.js`.
+### Hook Payloads
+
+All hook payloads include three common fields:
+
+| Field | Description |
+|-------|-------------|
+| `event` | The event name (e.g. `"card.moved"`) |
+| `timestamp` | ISO 8601 datetime the event fired |
+| `notifications` | Boolean — whether desktop notifications are enabled in VS Code settings |
+
+Additional fields per event:
+
+**`card.created`**
+
+| Field | Description |
+|-------|-------------|
+| `card_id` | New card id |
+| `card_title` | Empty string (card has no content yet) |
+| `column` | Column the card was created in |
+| `card_path` | Relative path to card file, e.g. `"cards/20260101-a1b2.md"` |
+
+**`card.edited`**
+
+| Field | Description |
+|-------|-------------|
+| `card_id` | Card id |
+| `card_title` | Extracted title after the edit |
+| `card_path` | Relative path to card file |
+
+**`card.deleted`**
+
+| Field | Description |
+|-------|-------------|
+| `card_id` | Card id |
+| `card_title` | Title at time of deletion |
+| `last_column` | Column the card was in when deleted |
+
+**`card.moved`**
+
+| Field | Description |
+|-------|-------------|
+| `card_id` | Card id |
+| `card_title` | Card title |
+| `from_column` | Column the card left |
+| `to_column` | Column the card entered |
+| `branch` | Value of the `branch` metadata field, if set |
+| `card_path` | Relative path to card file |
+
+**`policy.overridden`**
+
+| Field | Description |
+|-------|-------------|
+| `card_id` | Card id |
+| `card_title` | Card title |
+| `from_column` | Column the card left |
+| `to_column` | Column the card entered |
+| `policy` | Policy key that was violated (e.g. `"entry:done"`) |
+| `message` | The human-readable violation message shown to the user |
+
+**`cards.archived`**
+
+| Field | Description |
+|-------|-------------|
+| `column` | Column that was swept — the id configured in `column_stamps.done_at` |
 
 ---
 
 ## Archiving
 
-Archive Done cards regularly to keep the board readable. Archived cards are stored in `archive/` and remain searchable. Archive is not deletion — it is the historical record of completed work.
+Archive Done cards regularly to keep the board readable. Archived card files are moved to `archive/` and stamped with `archived_at`. Archive is not deletion — it is the historical record of completed work.
+
+The column to archive from is determined by `column_stamps.done_at` in `manifest.json`. Changing that value redirects both the `done_at` timestamp and the archive sweep to the new column id.

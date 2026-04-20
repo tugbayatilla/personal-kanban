@@ -63,6 +63,7 @@ function writeMinimalManifest(boardRoot: string, wipLimit: number | null = null)
       { id: 'in-progress',  label: 'In Progress',  index: 1, wip_limit: wipLimit, policies: [] },
       { id: 'done',         label: 'Done',          index: 2, wip_limit: null,     policies: [] },
     ],
+    column_stamps: { active_at: 'in-progress', done_at: 'done' },
     scripts: {},
     hooks: {},
   };

@@ -248,10 +248,11 @@ export class BoardPanel {
           card.metadata.column = msg.toColumn;
           card.metadata.order = String(calcOrder(prevOrder, nextOrder));
 
-          if (msg.toColumn === 'in-progress' && !card.metadata.active_at) {
+          const stamps = manifest.column_stamps ?? {};
+          if (stamps.active_at === msg.toColumn && !card.metadata.active_at) {
             card.metadata.active_at = now;
           }
-          if (msg.toColumn === 'done') {
+          if (stamps.done_at === msg.toColumn) {
             card.metadata.done_at = now;
           }
 
@@ -308,7 +309,8 @@ export class BoardPanel {
         this._suppressWatch();
         const m4 = withLock(this._boardRoot, () => {
           const { manifest } = loadBoardState(this._boardRoot);
-          const doneCol = manifest.columns.find((c) => c.id === 'done');
+          const archiveColumnId = manifest.column_stamps?.done_at ?? 'done';
+          const doneCol = manifest.columns.find((c) => c.id === archiveColumnId);
           if (doneCol && doneCol.cards && doneCol.cards.length > 0) {
             const archivedAt = new Date().toISOString();
             for (const id of doneCol.cards) {
@@ -322,7 +324,7 @@ export class BoardPanel {
           }
           return manifest;
         });
-        fireHook(this._boardRoot, m4, 'cards.archived', { column: 'done' });
+        fireHook(this._boardRoot, m4, 'cards.archived', { column: m4.column_stamps?.done_at ?? 'done' });
         this._sendState();
         break;
       }

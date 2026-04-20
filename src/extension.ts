@@ -80,6 +80,10 @@ function initBoard(context: vscode.ExtensionContext): void {
       },
       board_policies: ['wip-limit', 'no-pullback'],
       policy_bypass_tags: [],
+      column_stamps: {
+        active_at: 'in-progress',
+        done_at: 'done',
+      },
       tags: {},
       scripts: {
         'policy-overridden': { file: 'scripts/policy-overridden.js' },
@@ -404,37 +408,40 @@ readPayload('policy-no-pullback', ({ from_column, to_column, columns }) => {
 
 const SCRIPT_POLICY_ENTRY_REVIEW = `#!/usr/bin/env node
 // Policy script: entry:review
-// Exits 1 (violated) to require explicit approval before a card enters Review.
-// Customize this script to add your own readiness checks — e.g. check for a
-// #ready tag or verify all checklist items are ticked in the card content.
+// Exits 1 (violated) if the card has any unchecked checklist items.
+// Exits 0 (ok) if all items are checked or there are no checklist items.
 //
 // Payload: { card_id, card_title, from_column, to_column, columns, policy, ... }
 
 'use strict';
 
-const { readPayload } = require('./lib');
+const path = require('path');
+const { readPayload, readCard } = require('./lib');
 
-readPayload('policy-entry-review', () => {
-  // Always require confirmation before entering Review.
-  // Replace with conditional logic to allow certain moves silently (exit 0).
-  process.exit(1);
+readPayload('policy-entry-review', ({ card_id }) => {
+  const cardPath = path.join('cards', \`\${card_id}.md\`);
+  const { content } = readCard(cardPath);
+  const hasUnchecked = /^- \\[ \\]/m.test(content);
+  process.exit(hasUnchecked ? 1 : 0);
 });
 `;
 
 const SCRIPT_POLICY_ENTRY_DONE = `#!/usr/bin/env node
 // Policy script: entry:done
-// Exits 1 (violated) to require explicit approval before a card enters Done.
-// Customize this script to add your own acceptance checks.
+// Exits 1 (violated) if the card has any unchecked checklist items.
+// Exits 0 (ok) if all items are checked or there are no checklist items.
 //
 // Payload: { card_id, card_title, from_column, to_column, columns, policy, ... }
 
 'use strict';
 
-const { readPayload } = require('./lib');
+const path = require('path');
+const { readPayload, readCard } = require('./lib');
 
-readPayload('policy-entry-done', () => {
-  // Always require confirmation before entering Done.
-  // Replace with conditional logic to allow certain moves silently (exit 0).
-  process.exit(1);
+readPayload('policy-entry-done', ({ card_id }) => {
+  const cardPath = path.join('cards', \`\${card_id}.md\`);
+  const { content } = readCard(cardPath);
+  const hasUnchecked = /^- \\[ \\]/m.test(content);
+  process.exit(hasUnchecked ? 1 : 0);
 });
 `;
