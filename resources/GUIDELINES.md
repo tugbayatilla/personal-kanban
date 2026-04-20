@@ -237,6 +237,46 @@ Scripts in `scripts/` fire automatically in response to board events. They are f
 
 Scripts receive a JSON payload via stdin. Shared helpers are in `scripts/lib.js`. Use `readPayload` to parse stdin and `readCard` / `updateCardMetadata` for card file access.
 
+### Accessing Full Card Metadata
+
+Payloads only include a subset of card fields. To access the full metadata — including `creator`, `implementor`, `reviewer`, `branch`, and any custom fields you have added to the card's frontmatter — call `readCard(card_path)` inside any hook or policy script:
+
+```js
+const { readPayload, readCard } = require('./lib');
+
+readPayload('card-moved', ({ card_path }) => {
+  const card = readCard(card_path);
+
+  // Standard lifecycle fields:
+  console.log(card.metadata.creator);
+  console.log(card.metadata.implementor);
+  console.log(card.metadata.reviewer);
+  console.log(card.metadata.branch);
+
+  // Any custom field from the card's frontmatter:
+  console.log(card.metadata.my_custom_field);
+
+  // Enumerate everything:
+  for (const [key, value] of Object.entries(card.metadata)) {
+    console.log(key, value);
+  }
+});
+```
+
+`CardMetadata` has an index signature (`[key: string]: string | undefined`), so any frontmatter field you add to a card is automatically accessible via `card.metadata.your_field` — no schema changes required.
+
+**Policy scripts** do not receive `card_path` in their payload. Reconstruct it from `card_id`:
+
+```js
+const { readPayload, readCard } = require('./lib');
+
+readPayload('my-policy', ({ card_id }) => {
+  const card = readCard(`cards/${card_id}.md`);
+  // card.metadata has everything
+  process.exit(0);
+});
+```
+
 ### Hook Payloads
 
 All hook payloads include three common fields:
