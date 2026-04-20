@@ -36,6 +36,57 @@ WIP (Work In Progress) limits are the core control mechanism of Kanban. They mak
 
 ---
 
+## Card Structure
+
+Every card is a Markdown file in `cards/`. Its structure has three parts: frontmatter, a tag line, and a body.
+
+```
+---
+id: YYYYMMDD-xxxx           # Auto-generated unique id. Never edit.
+created_at: ISO8601         # Auto-generated creation time. Never edit.
+column: column-id           # Current column. Managed by the extension.
+order: float                # Order within the column. Managed by the extension.
+active_at: ISO8601          # Set when the card first enters the active column.
+done_at: ISO8601            # Set each time the card enters the done column.
+archived_at: ISO8601        # Set when the card is archived.
+created_by: "Name <email>"  # Git user who created the card.
+active_by: "Name <email>"   # Git user who started work.
+done_by: "Name <email>"     # Git user who accepted the card.
+archived_by: "Name <email>" # Git user who archived the card.
+branch: branch-name         # Optional. Git branch for this card's work.
+---
+
+#tag [#tag2...]
+
+# Title
+
+Body — description, context, acceptance criteria, notes.
+```
+
+- **Extension-managed** (`id`, `created_at`, `column`, `order`): do not edit manually. The extension owns these.
+- **Lifecycle fields** (`active_at`, `done_at`, `archived_at`, `*_by`): written automatically. You may read but should not edit them.
+- **Optional** (`branch`, any custom key): set manually or by tooling. Any frontmatter key you add is accessible in hook and policy scripts via `card.metadata.your_key`.
+
+The tag line (`#tag`) and title (`# Title`) are the only required body elements. Everything else is free-form Markdown.
+
+---
+
+## Workflow
+
+The standard lifecycle of a card:
+
+1. **Create** — Add a card to Backlog. Give it a tag and a title. Full description is optional at this stage.
+2. **Refine** — When the card is scoped and understood, move it to Refined. It should be small enough to complete in one sitting and described well enough that anyone could pick it up.
+3. **Pull** — When a WIP slot is free, move the card to In Progress. Check the WIP limit before pulling. Only pull what you intend to start immediately.
+4. **Work** — Do the work. Update the card body as you learn things. If blocked, add a `#blocked` tag and a note.
+5. **Submit for Review** — When done from your perspective, move the card to Review. The `entry:review` policy will prompt you to confirm acceptance criteria are met.
+6. **Accept** — A second person (or the same person after a deliberate pause) verifies the outcome and moves the card to Done. The `entry:done` policy prompts for confirmation.
+7. **Archive** — Periodically sweep Done cards into `archive/`. This keeps the board readable and preserves history.
+
+Transitions are **pull-based**: cards are not pushed forward by their author — they are pulled when the next stage is ready.
+
+---
+
 ## Card Metadata
 
 Every card carries a YAML frontmatter block. Fields are written automatically by the extension and hook scripts — you can also edit them directly in the card file.
@@ -351,3 +402,74 @@ Additional fields per event:
 Archive Done cards regularly to keep the board readable. Archived card files are moved to `archive/` and stamped with `archived_at`. Archive is not deletion — it is the historical record of completed work.
 
 The column to archive from is determined by `column_stamps.done_at` in `manifest.json`. Changing that value redirects both the `done_at` timestamp and the archive sweep to the new column id.
+
+---
+
+## Manifest Reference
+
+`manifest.json` is the single source of truth for board configuration. It defines columns, policies, hooks, stamps, and scripts. Nothing is hard-coded in the extension — the board is exactly what the manifest describes.
+
+### Top-level fields
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `version` | number | Schema version. Currently `1`. |
+| `name` | string | Human-readable board name. |
+| `columns` | object[] | Ordered list of columns. Left-to-right defines the value stream. |
+| `policies` | object | Registry of all policies. Keys are policy ids. |
+| `board_policies` | string[] | Policy ids applied to every card move on the board. |
+| `column_stamps` | object | Maps stamp names (`active_at`, `done_at`) to column ids. |
+| `policy_bypass_tags` | string[] | Card tags that exempt a move from all policy checks. |
+| `scripts` | object | Named scripts available to the hook system. |
+| `hooks` | object | Maps event names to lists of script names to run. |
+
+### Column object
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `id` | string | Unique column identifier. Used in card frontmatter and policy references. |
+| `label` | string | Display name shown on the board. |
+| `index` | number | Render order (0 = leftmost). |
+| `wip_limit` | number\|null | Maximum cards allowed in the column. `null` = no limit. |
+| `policies` | string[] | Policy ids checked when a card **enters** this column. |
+| `cards` | string[] | Ordered list of active card ids. Managed by the extension — do not edit manually. |
+
+### Registering scripts and hooks
+
+Scripts are Node.js files in `scripts/`. Register them in `scripts` by name, then reference that name in `hooks`:
+
+```json
+"scripts": {
+  "my-script": { "file": "scripts/my-script.js" }
+},
+"hooks": {
+  "card.moved": ["card-moved", "my-script"]
+}
+```
+
+Multiple scripts can be listed per event. They run in order. Adding a script to an event does not require any extension changes.
+
+---
+
+## Responsibilities
+
+Understanding who owns what prevents confusion about why things happen.
+
+| Responsibility | Owner |
+|----------------|-------|
+| Rendering the board | Extension |
+| Writing `id`, `created_at`, `column`, `order` | Extension |
+| Firing hooks on card events | Extension |
+| Enforcing policies on card moves | Extension (via policy scripts) |
+| Stamping `active_at`, `done_at`, `archived_at` | Extension |
+| Stamping `*_by` people fields | Hook scripts (`card-created.js`, `card-moved.js`) |
+| Archiving Done cards | Extension (on user action) |
+| Creating and editing card content | User |
+| Deciding when a card is ready to pull | User |
+| Deciding when work is done | User |
+| Moving cards through columns | User (via the board UI) |
+| Configuring columns, policies, and hooks | User (by editing `manifest.json`) |
+| Setting the `branch` field | User or tooling |
+| Writing notification side-effects | Hook scripts (`card-moved.js`, etc.) |
+
+**The extension does not know or care about your workflow.** It renders columns, enforces the rules you define, and fires events. The rest is up to you.
