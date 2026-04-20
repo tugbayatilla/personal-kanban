@@ -252,9 +252,13 @@ const SCRIPT_LIB_DTS = `// Type declarations for scripts/lib.js
 export interface CardMetadata {
   id?: string;
   created_at: string;
+  /** Column id this card belongs to */
   column?: string;
+  /** Sort order within the column (fractional indexing; lower = higher position) */
   order?: string;
+  /** Stamped the first time the card enters the column_stamps.active_at column */
   active_at?: string;
+  /** Stamped every time the card enters the column_stamps.done_at column */
   done_at?: string;
   branch?: string;
   archived_at?: string;
@@ -263,6 +267,7 @@ export interface CardMetadata {
 
 export interface Card {
   metadata: CardMetadata;
+  /** Markdown body after the frontmatter block */
   content: string;
 }
 
@@ -273,7 +278,7 @@ export interface PolicyPayload {
   event: 'card.moving';
   /** ISO 8601 datetime of the move attempt */
   timestamp: string;
-  /** Card file id, e.g. "20260101-a1b2" */
+  /** Note: policy payloads do NOT include a notifications field */
   card_id: string;
   /** First # heading from the card content */
   card_title: string;
@@ -294,16 +299,21 @@ export interface PolicyPayload {
 // ── Hook payloads ─────────────────────────────────────────────────────────────
 
 interface BaseHookPayload {
+  /** The event name, e.g. "card.moved" */
   event: string;
+  /** ISO 8601 datetime the event fired */
   timestamp: string;
+  /** Whether desktop notifications are enabled in VS Code settings */
   notifications: boolean;
 }
 
 export interface CardCreatedPayload extends BaseHookPayload {
   event: 'card.created';
   card_id: string;
+  /** Empty string — card has no content yet */
   card_title: string;
   column: string;
+  /** Relative path, e.g. "cards/20260101-a1b2.md" */
   card_path: string;
 }
 
@@ -311,6 +321,7 @@ export interface CardEditedPayload extends BaseHookPayload {
   event: 'card.edited';
   card_id: string;
   card_title: string;
+  /** Relative path to the card file */
   card_path: string;
 }
 
@@ -318,6 +329,7 @@ export interface CardDeletedPayload extends BaseHookPayload {
   event: 'card.deleted';
   card_id: string;
   card_title: string;
+  /** Column the card was in when deleted */
   last_column: string;
 }
 
@@ -327,7 +339,9 @@ export interface CardMovedPayload extends BaseHookPayload {
   card_title: string;
   from_column: string;
   to_column: string;
+  /** Value of the branch metadata field, if set */
   branch?: string;
+  /** Relative path to the card file */
   card_path: string;
 }
 
@@ -337,12 +351,15 @@ export interface PolicyOverriddenPayload extends BaseHookPayload {
   card_title: string;
   from_column: string;
   to_column: string;
+  /** Policy key that was violated, e.g. "entry:done" */
   policy: string;
+  /** The human-readable violation message shown to the user */
   message: string;
 }
 
 export interface CardsArchivedPayload extends BaseHookPayload {
   event: 'cards.archived';
+  /** Column that was swept — the id configured in column_stamps.done_at */
   column: string;
 }
 
@@ -402,6 +419,8 @@ readPayload('card-moved', ({ card_title, from_column, to_column, branch, notific
   let title = 'Kanban: Card Moved';
   let message;
 
+  // These column ids match the default manifest. If you rename your columns,
+  // update the checks below to match your column_stamps / column ids.
   if (to_column === 'review') {
     title = 'Kanban: Ready for Review';
     message = branch
@@ -560,6 +579,7 @@ const path = require('path');
 const { readPayload, readCard } = require('./lib');
 
 readPayload('policy-entry-review', ({ card_id }) => {
+  // cwd is set to boardRoot by the extension spawner — relative paths are safe.
   const cardPath = path.join('cards', \`\${card_id}.md\`);
   const { content } = readCard(cardPath);
   const hasUnchecked = /^- \\[ \\]/m.test(content);
@@ -580,6 +600,7 @@ const path = require('path');
 const { readPayload, readCard } = require('./lib');
 
 readPayload('policy-entry-done', ({ card_id }) => {
+  // cwd is set to boardRoot by the extension spawner — relative paths are safe.
   const cardPath = path.join('cards', \`\${card_id}.md\`);
   const { content } = readCard(cardPath);
   const hasUnchecked = /^- \\[ \\]/m.test(content);

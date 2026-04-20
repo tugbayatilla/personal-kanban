@@ -89,6 +89,7 @@ function writeManifestWithPolicyScript(boardRoot: string, scriptFile: string): v
       },
     },
     board_policies: [],
+    column_stamps: { active_at: 'in-progress', done_at: 'done' },
     scripts: {},
     hooks: {},
   };
@@ -540,6 +541,7 @@ describe('BoardPanel message handler', () => {
         },
         board_policies: [],
         policy_bypass_tags: ['expedite'],
+        column_stamps: { active_at: 'in-progress', done_at: 'done' },
         scripts: {}, hooks: {},
       };
       fs.writeFileSync(path.join(boardRoot, 'manifest.json'), JSON.stringify(manifest));
@@ -582,7 +584,9 @@ describe('BoardPanel message handler', () => {
           'p1': { description: '', message: 'First policy.',  script: `${SCRIPTS_DIR}/p1.js` },
           'p2': { description: '', message: 'Second policy.', script: `${SCRIPTS_DIR}/p2.js` },
         },
-        board_policies: [], scripts: {}, hooks: {},
+        board_policies: [],
+        column_stamps: { active_at: 'in-progress', done_at: 'done' },
+        scripts: {}, hooks: {},
       };
       fs.writeFileSync(path.join(boardRoot, 'manifest.json'), JSON.stringify(manifest));
       writeCard(boardRoot, makeCard('card-1', { column: 'in-progress', order: '0.5' }));
