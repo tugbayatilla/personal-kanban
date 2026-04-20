@@ -110,6 +110,8 @@ function initBoard(context: vscode.ExtensionContext): void {
     if (!fs.existsSync(filePath)) fs.writeFileSync(filePath, content);
   };
   writeIfMissing(path.join(boardRoot, 'scripts', 'lib.js'),                 SCRIPT_LIB);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'lib.d.ts'),               SCRIPT_LIB_DTS);
+  writeIfMissing(path.join(boardRoot, 'scripts', 'jsconfig.json'),          SCRIPT_JSCONFIG);
   writeIfMissing(path.join(boardRoot, 'scripts', 'card-created.js'),        SCRIPT_CARD_CREATED);
   writeIfMissing(path.join(boardRoot, 'scripts', 'card-edited.js'),         SCRIPT_CARD_EDITED);
   writeIfMissing(path.join(boardRoot, 'scripts', 'card-deleted.js'),        SCRIPT_CARD_DELETED);
@@ -240,6 +242,145 @@ function updateCardMetadata(cardPath, updates) {
 }
 
 module.exports = { readPayload, notify, readCard, writeCard, updateCardMetadata };
+`;
+
+const SCRIPT_LIB_DTS = `// Type declarations for scripts/lib.js
+// VS Code uses this file to provide intellisense in all scripts/*.js files.
+
+// ── Card types ────────────────────────────────────────────────────────────────
+
+export interface CardMetadata {
+  id?: string;
+  created_at: string;
+  column?: string;
+  order?: string;
+  active_at?: string;
+  done_at?: string;
+  branch?: string;
+  archived_at?: string;
+  [key: string]: string | undefined;
+}
+
+export interface Card {
+  metadata: CardMetadata;
+  content: string;
+}
+
+// ── Policy script payloads ────────────────────────────────────────────────────
+
+export interface PolicyPayload {
+  /** Always "card.moving" */
+  event: 'card.moving';
+  /** ISO 8601 datetime of the move attempt */
+  timestamp: string;
+  /** Card file id, e.g. "20260101-a1b2" */
+  card_id: string;
+  /** First # heading from the card content */
+  card_title: string;
+  /** Column id the card is leaving */
+  from_column: string;
+  /** Column id the card is entering */
+  to_column: string;
+  /** Current number of cards in the destination column */
+  to_column_card_count: number;
+  /** WIP limit of the destination column, or null if unset */
+  to_column_wip_limit: number | null;
+  /** Ordered array of all column ids, left → right */
+  columns: string[];
+  /** Key of the policy being checked, e.g. "entry:done" */
+  policy: string;
+}
+
+// ── Hook payloads ─────────────────────────────────────────────────────────────
+
+interface BaseHookPayload {
+  event: string;
+  timestamp: string;
+  notifications: boolean;
+}
+
+export interface CardCreatedPayload extends BaseHookPayload {
+  event: 'card.created';
+  card_id: string;
+  card_title: string;
+  column: string;
+  card_path: string;
+}
+
+export interface CardEditedPayload extends BaseHookPayload {
+  event: 'card.edited';
+  card_id: string;
+  card_title: string;
+  card_path: string;
+}
+
+export interface CardDeletedPayload extends BaseHookPayload {
+  event: 'card.deleted';
+  card_id: string;
+  card_title: string;
+  last_column: string;
+}
+
+export interface CardMovedPayload extends BaseHookPayload {
+  event: 'card.moved';
+  card_id: string;
+  card_title: string;
+  from_column: string;
+  to_column: string;
+  branch?: string;
+  card_path: string;
+}
+
+export interface PolicyOverriddenPayload extends BaseHookPayload {
+  event: 'policy.overridden';
+  card_id: string;
+  card_title: string;
+  from_column: string;
+  to_column: string;
+  policy: string;
+  message: string;
+}
+
+export interface CardsArchivedPayload extends BaseHookPayload {
+  event: 'cards.archived';
+  column: string;
+}
+
+// ── readPayload overloads ─────────────────────────────────────────────────────
+
+export function readPayload(name: 'policy-entry-done',   cb: (payload: PolicyPayload)           => void): void;
+export function readPayload(name: 'policy-entry-review', cb: (payload: PolicyPayload)           => void): void;
+export function readPayload(name: 'policy-wip-limit',    cb: (payload: PolicyPayload)           => void): void;
+export function readPayload(name: 'policy-no-pullback',  cb: (payload: PolicyPayload)           => void): void;
+export function readPayload(name: 'card-created',        cb: (payload: CardCreatedPayload)      => void): void;
+export function readPayload(name: 'card-edited',         cb: (payload: CardEditedPayload)       => void): void;
+export function readPayload(name: 'card-deleted',        cb: (payload: CardDeletedPayload)      => void): void;
+export function readPayload(name: 'card-moved',          cb: (payload: CardMovedPayload)        => void): void;
+export function readPayload(name: 'policy-overridden',   cb: (payload: PolicyOverriddenPayload) => void): void;
+export function readPayload(name: 'cards-archived',      cb: (payload: CardsArchivedPayload)    => void): void;
+export function readPayload(name: string,                cb: (payload: Record<string, unknown>) => void): void;
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+
+/** Read and parse a card file into { metadata, content }. */
+export function readCard(cardPath: string): Card;
+
+/** Write a card file from metadata and markdown content. */
+export function writeCard(cardPath: string, metadata: CardMetadata, content: string): void;
+
+/** Patch specific metadata fields on a card file without touching others. */
+export function updateCardMetadata(cardPath: string, updates: Partial<CardMetadata>): void;
+
+/** Show a desktop notification (macOS / Windows / Linux). Non-fatal if unavailable. */
+export function notify(title: string, message: string): void;
+`;
+
+const SCRIPT_JSCONFIG = `{
+  "compilerOptions": {
+    "checkJs": false,
+    "strictNullChecks": true
+  }
+}
 `;
 
 // card-moved.js: primary handler for card column writes.
