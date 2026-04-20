@@ -20,6 +20,8 @@ Work moves left → right through the value stream. Each column has a distinct m
 
 **Queues** (Backlog, Refined) accumulate demand. **Active** columns should always respect WIP limits.
 
+Column ids, labels, order, and WIP limits are all defined in `manifest.json` under `columns`. The board renders whatever is there — no column names are hard-coded in the extension.
+
 ---
 
 ## WIP Limits
@@ -31,6 +33,28 @@ WIP (Work In Progress) limits are the core control mechanism of Kanban. They mak
 - Limits are enforced via the `wip-limit` board policy → `scripts/policy-wip-limit.js`.
 
 **When a WIP limit is hit, stop starting. Start finishing.**
+
+---
+
+## Column Stamps
+
+Two card metadata timestamps are written automatically when a card enters specific columns. Which columns trigger them is configured in `manifest.json` under `column_stamps`:
+
+```json
+"column_stamps": {
+  "active_at": "in-progress",
+  "done_at": "done"
+}
+```
+
+| Field | Behaviour |
+|-------|-----------|
+| `active_at` | Stamped the **first time** a card enters the configured column. Never overwritten on subsequent moves back. |
+| `done_at` | Stamped **every time** a card enters the configured column. |
+
+These values are used by flow metrics tools to calculate cycle time and lead time. To disable a stamp, remove its key. To point it at a different column, change the value to any valid column id.
+
+The archive operation (see [Archiving](#archiving)) also uses `column_stamps.done_at` to determine which column to sweep — so changing the done column id here updates both behaviours at once.
 
 ---
 
@@ -134,8 +158,8 @@ Track these to understand and improve the system over time.
 
 | Metric | What it tells you |
 |--------|------------------|
-| **Cycle time** | Time from In Progress → Done. Measures delivery speed. |
-| **Lead time** | Time from Backlog → Done. Measures end-to-end responsiveness. |
+| **Cycle time** | Time from `active_at` → `done_at`. Measures delivery speed. |
+| **Lead time** | Time from `created_at` → `done_at`. Measures end-to-end responsiveness. |
 | **Throughput** | Cards completed per week. Measures sustainable pace. |
 | **Queue age** | How long cards sit in Refined without being pulled. Reveals over-commitment or poor refinement. |
 
@@ -182,22 +206,30 @@ Tags describe the nature of the work. Use one primary tag per card.
 
 ## Automation & Hooks
 
-Scripts in `scripts/` fire automatically in response to board events. They are for notifications and policy enforcement — not for tracking state outside the board.
+Scripts in `scripts/` fire automatically in response to board events. They are for notifications and post-move side effects — not for tracking state outside the board.
 
 | Hook event | Script | Fires when |
 |------------|--------|------------|
-| `policy.overridden` | `policy-overridden.js` | A policy was violated, user approved, move proceeded |
 | `card.created` | `card-created.js` | A new card is created |
-| `card.moved` | `card-moved.js` | A card changes column (handles Review and Done notifications too) |
 | `card.edited` | `card-edited.js` | A card's content changes |
 | `card.deleted` | `card-deleted.js` | A card is deleted |
+| `card.moved` | `card-moved.js` | A card changes column |
+| `policy.overridden` | `policy-overridden.js` | A policy was violated, user approved, move proceeded |
 | `cards.archived` | `cards-archived.js` | Done cards are archived |
 
 Scripts receive a JSON payload via stdin. Shared helpers are in `scripts/lib.js`. Use `readPayload` to parse stdin and `readCard` / `updateCardMetadata` for card file access.
 
 ### Hook Payloads
 
-All hook payloads include `event`, `timestamp`, and `notifications` (boolean — whether desktop notifications are enabled). Additional fields per event:
+All hook payloads include three common fields:
+
+| Field | Description |
+|-------|-------------|
+| `event` | The event name (e.g. `"card.moved"`) |
+| `timestamp` | ISO 8601 datetime the event fired |
+| `notifications` | Boolean — whether desktop notifications are enabled in VS Code settings |
+
+Additional fields per event:
 
 **`card.created`**
 
@@ -250,10 +282,12 @@ All hook payloads include `event`, `timestamp`, and `notifications` (boolean —
 
 | Field | Description |
 |-------|-------------|
-| `column` | Column that was archived (the done column) |
+| `column` | Column that was swept — the id configured in `column_stamps.done_at` |
 
 ---
 
 ## Archiving
 
-Archive Done cards regularly to keep the board readable. Archived cards are stored in `archive/` and remain searchable. Archive is not deletion — it is the historical record of completed work.
+Archive Done cards regularly to keep the board readable. Archived card files are moved to `archive/` and stamped with `archived_at`. Archive is not deletion — it is the historical record of completed work.
+
+The column to archive from is determined by `column_stamps.done_at` in `manifest.json`. Changing that value redirects both the `done_at` timestamp and the archive sweep to the new column id.
