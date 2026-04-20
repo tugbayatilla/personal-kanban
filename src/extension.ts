@@ -215,7 +215,7 @@ function readCard(cardPath) {
  * Field order: id, created_at, column, order, then remaining fields alphabetically.
  */
 function writeCard(cardPath, metadata, content) {
-  const priority = ['id', 'created_at', 'column', 'order', 'active_at', 'done_at', 'branch', 'archived_at'];
+  const priority = ['id', 'created_at', 'column', 'order', 'active_at', 'done_at', 'branch', 'archived_at', 'created_by', 'active_by', 'done_by', 'archived_by'];
   const lines = ['---'];
   for (const key of priority) {
     if (metadata[key] !== undefined && metadata[key] !== '') {
@@ -280,11 +280,13 @@ export interface CardMetadata {
   branch?: string;
   archived_at?: string;
   /** Git user who created the card, e.g. "Name <email>" */
-  creator?: string;
+  created_by?: string;
   /** Git user who moved the card to the active_at column */
-  implementor?: string;
+  active_by?: string;
   /** Git user who moved the card to the done_at column */
-  reviewer?: string;
+  done_by?: string;
+  /** Git user who archived the card */
+  archived_by?: string;
   [key: string]: string | undefined;
 }
 
@@ -446,7 +448,7 @@ const fs = require('fs');
 const { readPayload, notify, updateCardMetadata, getGitUser } = require('./lib');
 
 readPayload('card-moved', ({ card_title, from_column, to_column, branch, card_path, notifications }) => {
-  // Stamp implementor / reviewer from git user based on column_stamps config.
+  // Stamp active_by / done_by from git user based on column_stamps config.
   // cwd is set to boardRoot by the extension spawner — relative paths are safe.
   try {
     const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
@@ -454,9 +456,9 @@ readPayload('card-moved', ({ card_title, from_column, to_column, branch, card_pa
     const user = getGitUser();
     if (user) {
       if (to_column === stamps.active_at) {
-        updateCardMetadata(card_path, { implementor: user });
+        updateCardMetadata(card_path, { active_by: user });
       } else if (to_column === stamps.done_at) {
-        updateCardMetadata(card_path, { reviewer: user });
+        updateCardMetadata(card_path, { done_by: user });
       }
     }
   } catch {
@@ -501,7 +503,7 @@ readPayload('card-created', ({ card_id, card_title, column, card_path }) => {
   const user = getGitUser();
   if (user) {
     // cwd is set to boardRoot by the extension spawner — relative paths are safe.
-    updateCardMetadata(card_path, { creator: user });
+    updateCardMetadata(card_path, { created_by: user });
   }
   process.stdout.write(\`card created: "\${card_title}" (\${card_id}) in \${column}\\n\`);
 });

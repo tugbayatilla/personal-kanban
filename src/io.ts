@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 import * as vscode from 'vscode';
 import { Card, Manifest } from './types';
 
@@ -164,7 +165,7 @@ export function writeManifest(boardRoot: string, manifest: Manifest): void {
 
 const KNOWN_CARD_KEYS = new Set([
   'id', 'created_at', 'column', 'order', 'active_at', 'done_at', 'branch', 'archived_at',
-  'creator', 'implementor', 'reviewer',
+  'created_by', 'active_by', 'done_by', 'archived_by',
 ]);
 
 function parseCardMd(raw: string, id: string): Card {
@@ -196,9 +197,10 @@ function parseCardMd(raw: string, id: string): Card {
       ...(fm.done_at    ? { done_at:     fm.done_at }     : {}),
       ...(fm.branch       ? { branch:       fm.branch }       : {}),
       ...(fm.archived_at  ? { archived_at:  fm.archived_at }  : {}),
-      ...(fm.creator      ? { creator:      fm.creator }      : {}),
-      ...(fm.implementor  ? { implementor:  fm.implementor }  : {}),
-      ...(fm.reviewer     ? { reviewer:     fm.reviewer }     : {}),
+      ...(fm.created_by   ? { created_by:   fm.created_by }   : {}),
+      ...(fm.active_by    ? { active_by:    fm.active_by }    : {}),
+      ...(fm.done_by      ? { done_by:      fm.done_by }      : {}),
+      ...(fm.archived_by  ? { archived_by:  fm.archived_by }  : {}),
       ...extra,
     },
   };
@@ -216,9 +218,10 @@ function serializeCardMd(card: Card): string {
   if (card.metadata.done_at)     { lines.push(`done_at: ${card.metadata.done_at}`); }
   if (card.metadata.branch)      { lines.push(`branch: ${card.metadata.branch}`); }
   if (card.metadata.archived_at) { lines.push(`archived_at: ${card.metadata.archived_at}`); }
-  if (card.metadata.creator)     { lines.push(`creator: ${card.metadata.creator}`); }
-  if (card.metadata.implementor) { lines.push(`implementor: ${card.metadata.implementor}`); }
-  if (card.metadata.reviewer)    { lines.push(`reviewer: ${card.metadata.reviewer}`); }
+  if (card.metadata.created_by)  { lines.push(`created_by: ${card.metadata.created_by}`); }
+  if (card.metadata.active_by)   { lines.push(`active_by: ${card.metadata.active_by}`); }
+  if (card.metadata.done_by)     { lines.push(`done_by: ${card.metadata.done_by}`); }
+  if (card.metadata.archived_by) { lines.push(`archived_by: ${card.metadata.archived_by}`); }
 
   for (const [key, value] of Object.entries(card.metadata)) {
     if (!KNOWN_CARD_KEYS.has(key) && value !== undefined) {
@@ -258,6 +261,19 @@ export function writeCard(boardRoot: string, card: Card): void {
   atomicWrite(path.join(folder, `${card.id}.md`), serializeCardMd(card));
   const jsonPath = path.join(boardRoot, 'cards', `${card.id}.json`);
   if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath);
+}
+
+export function getGitUser(): string | null {
+  try {
+    const name  = execSync('git config user.name',  { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+    const email = execSync('git config user.email', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+    if (name && email) return `${name} <${email}>`;
+    if (name)          return name;
+    if (email)         return `<${email}>`;
+  } catch {
+    // git not available or user not configured
+  }
+  return null;
 }
 
 export function archiveCardFile(boardRoot: string, id: string): void {

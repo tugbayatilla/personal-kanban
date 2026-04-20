@@ -10,6 +10,7 @@ import {
   loadBoardState,
   withLock,
   calcOrder,
+  getGitUser,
 } from './io';
 import { Card, WebviewMessage } from './types';
 import { fireHook, runPolicyScript, logInfo, extractTitle } from './hooks';
@@ -313,10 +314,12 @@ export class BoardPanel {
           const doneCol = manifest.columns.find((c) => c.id === archiveColumnId);
           if (doneCol && doneCol.cards && doneCol.cards.length > 0) {
             const archivedAt = new Date().toISOString();
+            const archivedBy = getGitUser() ?? undefined;
             for (const id of doneCol.cards) {
               const card = readCard(this._boardRoot, id);
               if (card) {
                 card.metadata.archived_at = archivedAt;
+                if (archivedBy) { card.metadata.archived_by = archivedBy; }
                 writeCard(this._boardRoot, card);
               }
               archiveCardFile(this._boardRoot, id);

@@ -66,13 +66,14 @@ Three fields capture who touched the card at key lifecycle moments. They are wri
 
 | Field | Set when | Value |
 |-------|----------|-------|
-| `creator` | Card is created | Git user who created it |
-| `implementor` | Card enters `column_stamps.active_at` | Git user who started work |
-| `reviewer` | Card enters `column_stamps.done_at` | Git user who accepted it |
+| `created_by` | Card is created | Git user who created it |
+| `active_by` | Card enters `column_stamps.active_at` | Git user who started work |
+| `done_by` | Card enters `column_stamps.done_at` | Git user who accepted it |
+| `archived_by` | Card is archived | Git user who ran the archive operation |
 
-Format is `"Name <email>"`, `"Name"`, or `"<email>"` depending on what is configured. In a solo workflow all three will typically be the same person. In a team workflow `reviewer` will differ from `creator` and `implementor`.
+Format is `"Name <email>"`, `"Name"`, or `"<email>"` depending on what is configured. In a solo workflow all four will typically be the same person. In a team workflow `done_by` will differ from `created_by` and `active_by`.
 
-These fields are written by `scripts/card-created.js` and `scripts/card-moved.js`. You can customise the logic there — for example to write only the email, or to skip stamping under certain conditions.
+These fields are written by `scripts/card-created.js`, `scripts/card-moved.js`, and the extension's archive operation. You can customise the script logic — for example to write only the email, or to skip stamping under certain conditions.
 
 ---
 
@@ -239,7 +240,7 @@ Scripts receive a JSON payload via stdin. Shared helpers are in `scripts/lib.js`
 
 ### Accessing Full Card Metadata
 
-Payloads only include a subset of card fields. To access the full metadata — including `creator`, `implementor`, `reviewer`, `branch`, and any custom fields you have added to the card's frontmatter — call `readCard(card_path)` inside any hook or policy script:
+Payloads only include a subset of card fields. To access the full metadata — including `created_by`, `active_by`, `done_by`, `archived_by`, `branch`, and any custom fields you have added to the card's frontmatter — call `readCard(card_path)` inside any hook or policy script:
 
 ```js
 const { readPayload, readCard } = require('./lib');
@@ -248,9 +249,10 @@ readPayload('card-moved', ({ card_path }) => {
   const card = readCard(card_path);
 
   // Standard lifecycle fields:
-  console.log(card.metadata.creator);
-  console.log(card.metadata.implementor);
-  console.log(card.metadata.reviewer);
+  console.log(card.metadata.created_by);
+  console.log(card.metadata.active_by);
+  console.log(card.metadata.done_by);
+  console.log(card.metadata.archived_by);
   console.log(card.metadata.branch);
 
   // Any custom field from the card's frontmatter:

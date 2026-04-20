@@ -50,9 +50,10 @@ export interface CardMetadata {
   done_at?: string;
   branch?: string;
   archived_at?: string;
-  creator?: string;
-  implementor?: string;
-  reviewer?: string;
+  created_by?: string;
+  active_by?: string;
+  done_by?: string;
+  archived_by?: string;
   [key: string]: string | undefined;
 }
 
