@@ -36,9 +36,13 @@ WIP (Work In Progress) limits are the core control mechanism of Kanban. They mak
 
 ---
 
-## Column Stamps
+## Card Metadata
 
-Two card metadata timestamps are written automatically when a card enters specific columns. Which columns trigger them is configured in `manifest.json` under `column_stamps`:
+Every card carries a YAML frontmatter block. Fields are written automatically by the extension and hook scripts — you can also edit them directly in the card file.
+
+### Timestamps
+
+Two timestamps are written automatically when a card enters specific columns. Which columns trigger them is configured in `manifest.json` under `column_stamps`:
 
 ```json
 "column_stamps": {
@@ -55,6 +59,20 @@ Two card metadata timestamps are written automatically when a card enters specif
 These values are used by flow metrics tools to calculate cycle time and lead time. To disable a stamp, remove its key. To point it at a different column, change the value to any valid column id.
 
 The archive operation (see [Archiving](#archiving)) also uses `column_stamps.done_at` to determine which column to sweep — so changing the done column id here updates both behaviours at once.
+
+### People
+
+Three fields capture who touched the card at key lifecycle moments. They are written automatically from `git config user.name` and `git config user.email` and are silently skipped if git is unavailable or the user is not configured.
+
+| Field | Set when | Value |
+|-------|----------|-------|
+| `creator` | Card is created | Git user who created it |
+| `implementor` | Card enters `column_stamps.active_at` | Git user who started work |
+| `reviewer` | Card enters `column_stamps.done_at` | Git user who accepted it |
+
+Format is `"Name <email>"`, `"Name"`, or `"<email>"` depending on what is configured. In a solo workflow all three will typically be the same person. In a team workflow `reviewer` will differ from `creator` and `implementor`.
+
+These fields are written by `scripts/card-created.js` and `scripts/card-moved.js`. You can customise the logic there — for example to write only the email, or to skip stamping under certain conditions.
 
 ---
 
