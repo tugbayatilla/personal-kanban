@@ -164,6 +164,7 @@ export function writeManifest(boardRoot: string, manifest: Manifest): void {
 
 const KNOWN_CARD_KEYS = new Set([
   'id', 'created_at', 'column', 'order', 'active_at', 'done_at', 'branch', 'archived_at',
+  'creator', 'implementor', 'reviewer',
 ]);
 
 function parseCardMd(raw: string, id: string): Card {
@@ -193,8 +194,11 @@ function parseCardMd(raw: string, id: string): Card {
       ...(fm.order      ? { order:       fm.order }       : {}),
       ...(fm.active_at  ? { active_at:   fm.active_at }   : {}),
       ...(fm.done_at    ? { done_at:     fm.done_at }     : {}),
-      ...(fm.branch     ? { branch:      fm.branch }      : {}),
-      ...(fm.archived_at ? { archived_at: fm.archived_at } : {}),
+      ...(fm.branch       ? { branch:       fm.branch }       : {}),
+      ...(fm.archived_at  ? { archived_at:  fm.archived_at }  : {}),
+      ...(fm.creator      ? { creator:      fm.creator }      : {}),
+      ...(fm.implementor  ? { implementor:  fm.implementor }  : {}),
+      ...(fm.reviewer     ? { reviewer:     fm.reviewer }     : {}),
       ...extra,
     },
   };
@@ -212,6 +216,9 @@ function serializeCardMd(card: Card): string {
   if (card.metadata.done_at)     { lines.push(`done_at: ${card.metadata.done_at}`); }
   if (card.metadata.branch)      { lines.push(`branch: ${card.metadata.branch}`); }
   if (card.metadata.archived_at) { lines.push(`archived_at: ${card.metadata.archived_at}`); }
+  if (card.metadata.creator)     { lines.push(`creator: ${card.metadata.creator}`); }
+  if (card.metadata.implementor) { lines.push(`implementor: ${card.metadata.implementor}`); }
+  if (card.metadata.reviewer)    { lines.push(`reviewer: ${card.metadata.reviewer}`); }
 
   for (const [key, value] of Object.entries(card.metadata)) {
     if (!KNOWN_CARD_KEYS.has(key) && value !== undefined) {

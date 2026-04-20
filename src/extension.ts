@@ -241,7 +241,24 @@ function updateCardMetadata(cardPath, updates) {
   writeCard(cardPath, metadata, content);
 }
 
-module.exports = { readPayload, notify, readCard, writeCard, updateCardMetadata };
+/**
+ * Return the current git user as "Name <email>", "Name", or "<email>".
+ * Returns null if git is not available or neither name nor email is configured.
+ */
+function getGitUser() {
+  try {
+    const name  = execSync('git config user.name',  { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+    const email = execSync('git config user.email', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+    if (name && email) return \`\${name} <\${email}>\`;
+    if (name)          return name;
+    if (email)         return \`<\${email}>\`;
+  } catch {
+    // git not available or user not configured
+  }
+  return null;
+}
+
+module.exports = { readPayload, notify, readCard, writeCard, updateCardMetadata, getGitUser };
 `;
 
 const SCRIPT_LIB_DTS = `// Type declarations for scripts/lib.js
@@ -262,6 +279,12 @@ export interface CardMetadata {
   done_at?: string;
   branch?: string;
   archived_at?: string;
+  /** Git user who created the card, e.g. "Name <email>" */
+  creator?: string;
+  /** Git user who moved the card to the active_at column */
+  implementor?: string;
+  /** Git user who moved the card to the done_at column */
+  reviewer?: string;
   [key: string]: string | undefined;
 }
 
@@ -390,6 +413,12 @@ export function updateCardMetadata(cardPath: string, updates: Partial<CardMetada
 
 /** Show a desktop notification (macOS / Windows / Linux). Non-fatal if unavailable. */
 export function notify(title: string, message: string): void;
+
+/**
+ * Return the current git user as "Name <email>", "Name", or "<email>".
+ * Returns null if git is not available or user.name / user.email are not configured.
+ */
+export function getGitUser(): string | null;
 `;
 
 const SCRIPT_JSCONFIG = `{
@@ -413,9 +442,27 @@ const SCRIPT_CARD_MOVED = `#!/usr/bin/env node
 
 'use strict';
 
-const { readPayload, notify } = require('./lib');
+const fs = require('fs');
+const { readPayload, notify, updateCardMetadata, getGitUser } = require('./lib');
 
-readPayload('card-moved', ({ card_title, from_column, to_column, branch, notifications }) => {
+readPayload('card-moved', ({ card_title, from_column, to_column, branch, card_path, notifications }) => {
+  // Stamp implementor / reviewer from git user based on column_stamps config.
+  // cwd is set to boardRoot by the extension spawner — relative paths are safe.
+  try {
+    const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
+    const stamps = manifest.column_stamps ?? {};
+    const user = getGitUser();
+    if (user) {
+      if (to_column === stamps.active_at) {
+        updateCardMetadata(card_path, { implementor: user });
+      } else if (to_column === stamps.done_at) {
+        updateCardMetadata(card_path, { reviewer: user });
+      }
+    }
+  } catch {
+    // Non-fatal: manifest unreadable or git unavailable.
+  }
+
   let title = 'Kanban: Card Moved';
   let message;
 
@@ -444,13 +491,18 @@ const SCRIPT_CARD_CREATED = `#!/usr/bin/env node
 // Fires when a new card is created.
 //
 // Hook event: card.created
-// Payload: { event, timestamp, card_id, card_title, column, card_path }
+// Payload: { event, timestamp, notifications, card_id, card_title, column, card_path }
 
 'use strict';
 
-const { readPayload } = require('./lib');
+const { readPayload, updateCardMetadata, getGitUser } = require('./lib');
 
-readPayload('card-created', ({ card_id, card_title, column }) => {
+readPayload('card-created', ({ card_id, card_title, column, card_path }) => {
+  const user = getGitUser();
+  if (user) {
+    // cwd is set to boardRoot by the extension spawner — relative paths are safe.
+    updateCardMetadata(card_path, { creator: user });
+  }
   process.stdout.write(\`card created: "\${card_title}" (\${card_id}) in \${column}\\n\`);
 });
 `;
