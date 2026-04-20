@@ -83,21 +83,30 @@ To add a policy: add it to the `policies` registry, then reference its key in `b
 
 Policy scripts receive this payload on stdin:
 
-```json
-{
-  "event": "card.moving",
-  "card_id": "...",
-  "card_title": "...",
-  "from_column": "...",
-  "to_column": "...",
-  "to_column_card_count": 2,
-  "to_column_wip_limit": 3,
-  "columns": ["backlog", "refined", "in-progress", "review", "done"],
-  "policy": "no-pullback"
-}
-```
+| Field | Type | Description |
+|-------|------|-------------|
+| `event` | string | Always `"card.moving"` |
+| `timestamp` | string | ISO 8601 datetime of the move attempt |
+| `card_id` | string | Card file id (e.g. `"20260101-a1b2"`) |
+| `card_title` | string | First `# heading` from the card content |
+| `from_column` | string | Column id the card is leaving |
+| `to_column` | string | Column id the card is entering |
+| `to_column_card_count` | number | Current number of cards in the destination column |
+| `to_column_wip_limit` | number\|null | WIP limit of the destination column, or `null` if unset |
+| `columns` | string[] | Ordered array of all column ids (left → right) |
+| `policy` | string | Key of the policy being checked (e.g. `"entry:done"`) |
 
 The `columns` array gives scripts the full column order so they can determine move direction without reading the manifest. Use `readPayload` from `lib.js` to parse the payload.
+
+```js
+const { readPayload, readCard } = require('./lib');
+const path = require('path');
+
+readPayload('my-policy', ({ card_id, from_column, to_column, columns }) => {
+  // exit 0 = ok, exit 1 = violated
+  process.exit(0);
+});
+```
 
 ### Bypassing Policies
 
@@ -184,9 +193,64 @@ Scripts in `scripts/` fire automatically in response to board events. They are f
 | `card.deleted` | `card-deleted.js` | A card is deleted |
 | `cards.archived` | `cards-archived.js` | Done cards are archived |
 
-The `policy.overridden` payload includes `policy` (the key from the registry) and `message` (the human-readable explanation).
+Scripts receive a JSON payload via stdin. Shared helpers are in `scripts/lib.js`. Use `readPayload` to parse stdin and `readCard` / `updateCardMetadata` for card file access.
 
-Scripts receive a JSON payload via stdin. Shared helpers are in `scripts/lib.js`.
+### Hook Payloads
+
+All hook payloads include `event`, `timestamp`, and `notifications` (boolean — whether desktop notifications are enabled). Additional fields per event:
+
+**`card.created`**
+
+| Field | Description |
+|-------|-------------|
+| `card_id` | New card id |
+| `card_title` | Empty string (card has no content yet) |
+| `column` | Column the card was created in |
+| `card_path` | Relative path to card file, e.g. `"cards/20260101-a1b2.md"` |
+
+**`card.edited`**
+
+| Field | Description |
+|-------|-------------|
+| `card_id` | Card id |
+| `card_title` | Extracted title after the edit |
+| `card_path` | Relative path to card file |
+
+**`card.deleted`**
+
+| Field | Description |
+|-------|-------------|
+| `card_id` | Card id |
+| `card_title` | Title at time of deletion |
+| `last_column` | Column the card was in when deleted |
+
+**`card.moved`**
+
+| Field | Description |
+|-------|-------------|
+| `card_id` | Card id |
+| `card_title` | Card title |
+| `from_column` | Column the card left |
+| `to_column` | Column the card entered |
+| `branch` | Value of the `branch` metadata field, if set |
+| `card_path` | Relative path to card file |
+
+**`policy.overridden`**
+
+| Field | Description |
+|-------|-------------|
+| `card_id` | Card id |
+| `card_title` | Card title |
+| `from_column` | Column the card left |
+| `to_column` | Column the card entered |
+| `policy` | Policy key that was violated (e.g. `"entry:done"`) |
+| `message` | The human-readable violation message shown to the user |
+
+**`cards.archived`**
+
+| Field | Description |
+|-------|-------------|
+| `column` | Column that was archived (the done column) |
 
 ---
 
