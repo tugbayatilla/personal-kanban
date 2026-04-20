@@ -409,7 +409,7 @@ const SCRIPT_CARD_MOVED = `#!/usr/bin/env node
 // Handles notifications for all column transitions including Review and Done.
 //
 // Hook event: card.moved
-// Payload: { event, timestamp, card_id, card_title, from_column, to_column, branch, card_path }
+// Payload: { event, timestamp, notifications, card_id, card_title, from_column, to_column, branch, card_path }
 
 'use strict';
 
@@ -511,7 +511,7 @@ const SCRIPT_POLICY_OVERRIDDEN = `#!/usr/bin/env node
 // Fires after a user approves a policy violation and the card move proceeds.
 //
 // Hook event: policy.overridden
-// Payload: { event, timestamp, card_id, card_title, from_column, to_column, policy, message }
+// Payload: { event, timestamp, notifications, card_id, card_title, from_column, to_column, policy, message }
 
 'use strict';
 
