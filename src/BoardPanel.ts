@@ -248,10 +248,11 @@ export class BoardPanel {
           card.metadata.column = msg.toColumn;
           card.metadata.order = String(calcOrder(prevOrder, nextOrder));
 
-          if (msg.toColumn === 'in-progress' && !card.metadata.active_at) {
+          const stamps = manifest.column_stamps ?? {};
+          if (stamps.active_at === msg.toColumn && !card.metadata.active_at) {
             card.metadata.active_at = now;
           }
-          if (msg.toColumn === 'done') {
+          if (stamps.done_at === msg.toColumn) {
             card.metadata.done_at = now;
           }
 

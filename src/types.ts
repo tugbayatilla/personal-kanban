@@ -18,6 +18,13 @@ export interface Script {
   file: string;
 }
 
+export interface ColumnStamps {
+  /** Column id that triggers active_at stamping (first move only). */
+  active_at?: string;
+  /** Column id that triggers done_at stamping (every move). */
+  done_at?: string;
+}
+
 export interface Manifest {
   version: number;
   name: string;
@@ -25,6 +32,8 @@ export interface Manifest {
   policies?: Record<string, PolicyDefinition>;
   board_policies?: string[];
   policy_bypass_tags?: string[];
+  /** Maps metadata timestamp fields to the column id that triggers them. */
+  column_stamps?: ColumnStamps;
   tags: Record<string, { color: string; weight: number }>;
   scripts: Record<string, Script>;
   hooks: Record<string, string[]>;
