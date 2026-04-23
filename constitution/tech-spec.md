@@ -11,7 +11,7 @@
 | Linter | ESLint 8 + @typescript-eslint | Enforces conventions; no Prettier (formatting is a non-issue) |
 | Production deps | None | No npm packages at runtime; VSCode API + Node.js stdlib only |
 
-The webview frontend (`media/board.js`) is **plain JavaScript** — no framework, no build step. It communicates with the extension host via `acquireVsCodeApi().postMessage`.
+The webview frontends (`media/board.js`, `media/metrics.js`) are **plain JavaScript** — no framework, no build step. They communicate with the extension host via `acquireVsCodeApi().postMessage`.
 
 ---
 
@@ -19,15 +19,19 @@ The webview frontend (`media/board.js`) is **plain JavaScript** — no framework
 
 ```
 VSCode Extension Host
-├── extension.ts      — activation, command registration, Init Board scaffold
-├── BoardPanel.ts     — webview lifecycle, message dispatch, card I/O coordination
+├── extension.ts      — activation, command registration, Init Board scaffold, exportMetrics command
+├── BoardPanel.ts     — board webview lifecycle, message dispatch, card I/O coordination
+├── MetricsPanel.ts   — metrics webview lifecycle, sends card data to metrics frontend
+├── metrics.ts        — card loading (active + archived) and metrics computation (shared)
 ├── hooks.ts          — hook dispatcher (spawn node scripts, send JSON via stdin)
 ├── io.ts             — all file I/O: manifest, cards, board state assembly, locking, ordering
 └── types.ts          — TypeScript interfaces
 
 VSCode Webview (sandboxed)
-└── media/board.js    — rendering, drag-and-drop, inline editing, context menu
-    media/board.css   — VSCode theme-aware styling
+├── media/board.js    — board rendering, drag-and-drop, inline editing, context menu
+├── media/board.css   — board theme-aware styling
+├── media/metrics.js  — metrics rendering, SVG bar charts
+└── media/metrics.css — metrics theme-aware styling
 ```
 
 ### Key invariant: card-centric state
@@ -239,23 +243,41 @@ Settings are overlaid onto the manifest at read time. They are not written into 
 
 ## Webview ↔ Extension Host Protocol
 
-Messages from webview to extension host (`WebviewMessage`):
+### Board panel
+
+Messages from webview → extension host (`WebviewMessage`):
 
 | type | Payload |
 |---|---|
-| `addCard` | `column`, `content` |
+| `ready` | — |
+| `addCard` | `columnId` |
 | `saveCard` | `id`, `content` |
 | `deleteCard` | `id` |
-| `moveCard` | `id`, `toColumn`, `afterId` (card to insert after, or null) |
+| `moveCard` | `id`, `fromColumn`, `toColumn`, `toIndex` |
 | `archiveDone` | — |
 | `openCardFile` | `id` |
-| `ready` | — |
+| `openManifestFile` | — |
 
-Messages from extension host to webview (`ExtensionMessage`):
+Messages from extension host → webview (`ExtensionMessage`):
 
 | type | Payload |
 |---|---|
-| `board` | Full board state (manifest + columns with cards) |
+| `setState` | `manifest`, `cards` (full board state); or `manifest: null`, `error` on failure |
+
+### Metrics panel
+
+Messages from webview → extension host:
+
+| type | Payload |
+|---|---|
+| `ready` | — |
+| `refresh` | — |
+
+Messages from extension host → webview:
+
+| type | Payload |
+|---|---|
+| `setData` | `cards` (all card summaries), `columns` (id + label pairs); or `error` on failure |
 
 ---
 

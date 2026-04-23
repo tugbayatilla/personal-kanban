@@ -12,6 +12,8 @@ A file-based personal kanban board for VSCode. The entire board state lives in p
 - **Tag system** — write `#tagname` anywhere in a card; tags appear automatically
 - **Live sync** — editing card files or `manifest.json` externally refreshes the board instantly
 - **Lead time & cycle time** — done cards show lead time (creation → done); the metadata popup shows both
+- **Metrics panel** — separate view showing throughput, cycle time, lead time, and board snapshot charts
+- **Metrics JSON export** — one command writes `.personal-kanban/metrics.json` for use in external tools
 - **Hooks** — run Node.js scripts on board events (card moved, WIP exceeded, etc.)
 
 ## Commands
@@ -20,8 +22,10 @@ A file-based personal kanban board for VSCode. The entire board state lives in p
 |---|---|
 | `Personal Kanban: Init Board` | Creates `.personal-kanban/` with a default board, columns, and starter scripts |
 | `Personal Kanban: Open Board` | Opens the Kanban board webview panel |
+| `Personal Kanban: Open Metrics` | Opens the metrics webview panel with flow charts |
+| `Personal Kanban: Export Metrics JSON` | Writes `.personal-kanban/metrics.json` and opens it in the editor |
 
-Open the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) and type `Personal Kanban` to find both commands.
+Open the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) and type `Personal Kanban` to find all commands.
 
 ## Board Structure
 
@@ -227,6 +231,45 @@ Configure scripts and hooks in `manifest.json`:
   "card.moved": ["my-script"]
 }
 ```
+
+## Metrics
+
+Run `Personal Kanban: Open Metrics` to open a live metrics panel. It reads all active cards and archived cards and renders:
+
+- **Summary** — total completed, total active, average and median cycle time and lead time, throughput (cards/week over the last four weeks)
+- **Throughput chart** — weekly bar chart for the last twelve weeks
+- **Flow time distributions** — cycle time and lead time broken into buckets (`<1d`, `1–3d`, `3–7d`, `1–2wk`, `2–4wk`, `>4wk`)
+- **Board snapshot** — per-column card count and average card age
+
+The panel has a **Refresh** button that reloads from disk without reopening.
+
+### Exporting metrics as JSON
+
+Run `Personal Kanban: Export Metrics JSON` to generate `.personal-kanban/metrics.json`. The file opens automatically and contains:
+
+```json
+{
+  "generated_at": "2026-04-23T10:00:00.000Z",
+  "summary": {
+    "total_completed": 42,
+    "total_active": 5,
+    "cycle_time":  { "count": 30, "avg_ms": 172800000, "median_ms": 86400000, "avg_human": "2d", "median_human": "1d" },
+    "lead_time":   { "count": 42, "avg_ms": 432000000, "median_ms": 259200000, "avg_human": "5d", "median_human": "3d" },
+    "throughput":  { "last_4_weeks": 12, "per_week_avg": 3 }
+  },
+  "weekly_throughput":       [{ "week_start": "2026-01-06", "count": 3 }, "..."],
+  "cycle_time_distribution": [{ "bucket": "<1d", "count": 5 }, "..."],
+  "lead_time_distribution":  [{ "bucket": "<1d", "count": 2 }, "..."],
+  "board_snapshot":          [{ "column_id": "backlog", "label": "Backlog", "count": 10, "avg_age_ms": 604800000, "avg_age_human": "1wk" }, "..."],
+  "cards":                   [{ "id": "20260101-a1b2", "tags": ["feature"], "cycle_time_ms": 172800000, "cycle_time_human": "2d", "..." }]
+}
+```
+
+The `cards` array includes every card (active and archived). Completed cards are annotated with `cycle_time_ms`, `cycle_time_human`, `lead_time_ms`, and `lead_time_human`.
+
+> **Tip:** Add `.personal-kanban/metrics.json` to `.gitignore` if you regenerate it frequently and do not want it committed.
+
+---
 
 ## Claude Code Integration
 

@@ -2,7 +2,9 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { BoardPanel } from './BoardPanel';
-import { getBoardRoot, boardExists, writeManifest, withLock } from './io';
+import { MetricsPanel } from './MetricsPanel';
+import { getBoardRoot, boardExists, readManifest, writeManifest, withLock } from './io';
+import { loadAllCardFiles, computeMetrics } from './metrics';
 import { initLogger } from './hooks';
 import { Manifest } from './types';
 
@@ -16,7 +18,12 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('personal-kanban.openBoard', () => {
       const root = getWorkspaceRoot();
       if (root) BoardPanel.createOrShow(context, root, channel);
-    })
+    }),
+    vscode.commands.registerCommand('personal-kanban.openMetrics', () => {
+      const root = getWorkspaceRoot();
+      if (root) MetricsPanel.createOrShow(context, root);
+    }),
+    vscode.commands.registerCommand('personal-kanban.exportMetrics', () => exportMetrics())
   );
 }
 
@@ -146,6 +153,37 @@ function initBoard(context: vscode.ExtensionContext): void {
 }
 
 export function deactivate(): void {}
+
+// ── Export metrics ────────────────────────────────────────────────────────────
+
+function exportMetrics(): void {
+  const workspaceRoot = getWorkspaceRoot();
+  if (!workspaceRoot) return;
+
+  const boardRoot = getBoardRoot(workspaceRoot);
+
+  let manifest: Manifest;
+  try {
+    manifest = readManifest(boardRoot);
+  } catch (err) {
+    vscode.window.showErrorMessage(`Kanban: could not read board — ${String(err)}`);
+    return;
+  }
+
+  const cards = loadAllCardFiles(boardRoot);
+  const columns = manifest.columns.map((c) => ({ id: c.id, label: c.label }));
+  const data = computeMetrics(cards, columns);
+
+  const outPath = path.join(boardRoot, 'metrics.json');
+  try {
+    fs.writeFileSync(outPath, JSON.stringify(data, null, 2));
+  } catch (err) {
+    vscode.window.showErrorMessage(`Kanban: could not write metrics.json — ${String(err)}`);
+    return;
+  }
+
+  vscode.window.showTextDocument(vscode.Uri.file(outPath));
+}
 
 // ── Script templates ─────────────────────────────────────────────────────────
 //

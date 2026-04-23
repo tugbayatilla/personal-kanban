@@ -28,6 +28,14 @@
       {
         "command": "personal-kanban.openBoard",
         "title": "Personal Kanban: Open Board"
+      },
+      {
+        "command": "personal-kanban.openMetrics",
+        "title": "Personal Kanban: Open Metrics"
+      },
+      {
+        "command": "personal-kanban.exportMetrics",
+        "title": "Personal Kanban: Export Metrics JSON"
       }
     ],
     "configuration": {

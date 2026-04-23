@@ -1,0 +1,247 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  font-size: var(--vscode-font-size, 13px);
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+  min-height: 100vh;
+  overflow-y: auto;
+}
+
+#metrics-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ── Header ────────────────────────────────────────────────────────────────── */
+
+#metrics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 44px;
+  border-bottom: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.25));
+  background: var(--vscode-sideBar-background, rgba(128,128,128,0.04));
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.metrics-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+  opacity: 0.85;
+}
+
+.refresh-btn {
+  border: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.4));
+  background: transparent;
+  border-radius: 4px;
+  padding: 2px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  color: var(--vscode-descriptionForeground, rgba(128,128,128,0.8));
+  transition: all 0.15s;
+  line-height: 20px;
+}
+
+.refresh-btn:hover {
+  background: var(--vscode-list-hoverBackground);
+  color: var(--vscode-foreground);
+  border-color: var(--vscode-focusBorder, #007acc);
+}
+
+/* ── Content ────────────────────────────────────────────────────────────────── */
+
+#metrics-content {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  max-width: 1100px;
+}
+
+.metrics-error {
+  color: var(--vscode-errorForeground, #cc3333);
+  padding: 16px 0;
+}
+
+/* ── Section ────────────────────────────────────────────────────────────────── */
+
+.metrics-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--vscode-descriptionForeground, rgba(128,128,128,0.8));
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.2));
+}
+
+/* ── Stat tiles ─────────────────────────────────────────────────────────────── */
+
+.stat-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.stat-tile {
+  background: var(--vscode-sideBar-background, rgba(128,128,128,0.08));
+  border: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.2));
+  border-radius: 8px;
+  padding: 12px 16px;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--vscode-descriptionForeground, rgba(128,128,128,0.7));
+}
+
+.stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--vscode-foreground);
+  line-height: 1.2;
+}
+
+.stat-sub {
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground, rgba(128,128,128,0.6));
+}
+
+/* ── Charts ─────────────────────────────────────────────────────────────────── */
+
+.chart-wrap {
+  background: var(--vscode-sideBar-background, rgba(128,128,128,0.06));
+  border: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.18));
+  border-radius: 8px;
+  padding: 16px 16px 12px;
+}
+
+.chart-wrap svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+.chart-title {
+  font-size: 12px;
+  font-weight: 600;
+  fill: var(--vscode-foreground);
+}
+
+.chart-label {
+  font-size: 9px;
+  fill: var(--vscode-foreground);
+  opacity: 0.6;
+}
+
+.chart-value-label {
+  font-size: 9px;
+  fill: var(--vscode-foreground);
+  opacity: 0.8;
+}
+
+.chart-axis {
+  stroke: var(--vscode-foreground);
+  stroke-opacity: 0.18;
+  fill: none;
+}
+
+.chart-bar-primary {
+  fill: var(--vscode-charts-blue, #2563eb);
+}
+
+.chart-bar-secondary {
+  fill: var(--vscode-charts-green, #16a34a);
+}
+
+.chart-bar-accent {
+  fill: var(--vscode-charts-yellow, #ca8a04);
+}
+
+.chart-empty {
+  font-size: 12px;
+  fill: var(--vscode-descriptionForeground);
+  opacity: 0.6;
+}
+
+.charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* ── Board snapshot table ───────────────────────────────────────────────────── */
+
+.snapshot-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.snapshot-table th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--vscode-descriptionForeground, rgba(128,128,128,0.7));
+  padding: 0 12px 8px 0;
+  border-bottom: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.2));
+}
+
+.snapshot-table td {
+  padding: 8px 12px 8px 0;
+  border-bottom: 1px solid var(--vscode-widget-border, rgba(128,128,128,0.1));
+  vertical-align: top;
+  color: var(--vscode-foreground);
+}
+
+.snapshot-table tr:last-child td {
+  border-bottom: none;
+}
+
+.col-label-cell {
+  font-weight: 600;
+}
+
+.col-count-cell {
+  font-variant-numeric: tabular-nums;
+  min-width: 50px;
+}
+
+.col-wip-exceeded {
+  color: var(--vscode-inputValidation-errorForeground, #f44);
+}
+
+.col-age-cell {
+  color: var(--vscode-descriptionForeground, rgba(128,128,128,0.8));
+  font-size: 11px;
+}
+
+.no-data {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--vscode-descriptionForeground, rgba(128,128,128,0.6));
+  padding: 16px 0;
+}

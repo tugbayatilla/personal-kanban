@@ -4,9 +4,11 @@ This document describes where the project is going. Items are grouped by theme, 
 
 ---
 
-## In Progress
+## Recently Shipped
 
-Nothing currently in flight beyond maintenance.
+### Flow metrics panel & JSON export (v1.1.0)
+
+A dedicated `Personal Kanban: Open Metrics` panel showing throughput, cycle time, lead time, and a board snapshot — all computed from local card files, no external service. The `Personal Kanban: Export Metrics JSON` command writes `.personal-kanban/metrics.json` for consumption by external tools, dashboards, or scripts. Computation logic lives in `src/metrics.ts` and is shared between the panel and the export command.
 
 ---
 
@@ -59,17 +61,6 @@ Example:
   }
 }
 ```
-
-### Board-level analytics view
-
-A secondary panel (or a section of the board) showing flow metrics derived from card frontmatter:
-
-- **Throughput** — cards completed per week over the last N weeks
-- **Lead time distribution** — histogram of `done_at - created_at` for Done/archived cards
-- **Cycle time distribution** — histogram of `done_at - active_at`
-- **WIP over time** — cards in In Progress column day by day
-
-All data is computed from local files — no telemetry, no external service.
 
 ### Multi-board support
 
