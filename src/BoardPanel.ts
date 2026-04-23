@@ -1,3 +1,4 @@
+import * as path from 'path';
 import * as vscode from 'vscode';
 import {
   getBoardRoot,
@@ -24,6 +25,8 @@ export class BoardPanel {
   private _disposables: vscode.Disposable[] = [];
   /** Suppress watcher-triggered reloads until this timestamp (ms). */
   private _suppressWatchUntil = 0;
+  /** Tracks the last known column for each card id — used to detect external column changes. */
+  private _cardColumns = new Map<string, string>();
 
   public static createOrShow(context: vscode.ExtensionContext, workspaceRoot: string, channel: vscode.OutputChannel): void {
     if (BoardPanel.currentPanel) {
@@ -70,6 +73,10 @@ export class BoardPanel {
   private _sendState(editCardId?: string): void {
     try {
       const { manifest, cards } = withLock(this._boardRoot, () => loadBoardState(this._boardRoot));
+      // Keep column cache in sync so the watcher can detect external moves.
+      for (const [id, card] of Object.entries(cards)) {
+        if (card?.metadata.column) this._cardColumns.set(id, card.metadata.column);
+      }
       this._panel.webview.postMessage({ type: 'setState', manifest, cards, editCardId });
     } catch (err) {
       this._panel.webview.postMessage({
@@ -336,28 +343,64 @@ export class BoardPanel {
 
   private _startWatcher(): void {
     const boardDir = vscode.Uri.file(this._boardRoot);
-    const onChange = () => {
-      if (Date.now() < this._suppressWatchUntil) return;
-      this._sendState();
-    };
 
     // Watch manifest.json for external changes (column structure, scripts, hooks).
     const manifestWatcher = vscode.workspace.createFileSystemWatcher(
       new vscode.RelativePattern(boardDir, 'manifest.json')
     );
-    manifestWatcher.onDidChange(onChange, null, this._disposables);
-    manifestWatcher.onDidCreate(onChange, null, this._disposables);
+    const onManifestChange = () => {
+      if (Date.now() < this._suppressWatchUntil) return;
+      this._sendState();
+    };
+    manifestWatcher.onDidChange(onManifestChange, null, this._disposables);
+    manifestWatcher.onDidCreate(onManifestChange, null, this._disposables);
     this._disposables.push(manifestWatcher);
 
     // Watch card files — board state is derived from these in v1.
-    // External edits (e.g. changing `column:` via a script) will reload the board.
+    // External edits (e.g. the kanban agent changing `column:`) trigger a reload
+    // and fire card.moved hooks so hook scripts (which stamp metadata) still run.
     const cardsWatcher = vscode.workspace.createFileSystemWatcher(
       new vscode.RelativePattern(boardDir, 'cards/*.md')
     );
-    cardsWatcher.onDidChange(onChange, null, this._disposables);
-    cardsWatcher.onDidCreate(onChange, null, this._disposables);
-    cardsWatcher.onDidDelete(onChange, null, this._disposables);
+    const onCardChange = (uri: vscode.Uri) => {
+      if (Date.now() < this._suppressWatchUntil) return;
+      this._handleExternalCardChange(uri);
+    };
+    const onCardDelete = (uri: vscode.Uri) => {
+      if (Date.now() < this._suppressWatchUntil) return;
+      this._cardColumns.delete(path.basename(uri.fsPath, '.md'));
+      this._sendState();
+    };
+    cardsWatcher.onDidChange(onCardChange, null, this._disposables);
+    cardsWatcher.onDidCreate(onCardChange, null, this._disposables);
+    cardsWatcher.onDidDelete(onCardDelete, null, this._disposables);
     this._disposables.push(cardsWatcher);
+  }
+
+  /** Called when a card file changes externally. Detects column moves and fires hooks. */
+  private _handleExternalCardChange(uri: vscode.Uri): void {
+    const id = path.basename(uri.fsPath, '.md');
+    const card = readCard(this._boardRoot, id);
+    if (!card) { this._sendState(); return; }
+
+    const newColumn = card.metadata.column ?? '';
+    const oldColumn = this._cardColumns.get(id);
+    this._cardColumns.set(id, newColumn);
+
+    if (oldColumn !== undefined && oldColumn !== newColumn) {
+      // Column changed externally — fire card.moved so hook scripts run.
+      const manifest = readManifest(this._boardRoot);
+      fireHook(this._boardRoot, manifest, 'card.moved', {
+        card_id: id,
+        card_title: extractTitle(card.content),
+        from_column: oldColumn,
+        to_column: newColumn,
+        branch: card.metadata.branch,
+        card_path: `cards/${id}.md`,
+      });
+    }
+
+    this._sendState();
   }
 
   private _dispose(): void {

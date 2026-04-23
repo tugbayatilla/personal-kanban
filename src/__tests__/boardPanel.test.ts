@@ -713,4 +713,207 @@ describe('BoardPanel message handler', () => {
       expect(archiveFiles).toHaveLength(0);
     });
   });
+
+  // ── external card move hook firing ────────────────────────────────────────
+
+  describe('external card move hook firing', () => {
+    /**
+     * Helper: instantiate a BoardPanel and expose _handleExternalCardChange and
+     * _cardColumns so tests can simulate what the FileSystemWatcher fires.
+     */
+    function makePanel(workspaceRoot: string): {
+      handleExternalCardChange(uri: { fsPath: string }): void;
+      cardColumns: Map<string, string>;
+      postedMessages: unknown[];
+    } {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { BoardPanel } = require('../BoardPanel') as typeof import('../BoardPanel');
+
+      const postedMessages: unknown[] = [];
+      const fakeWebviewPanel = {
+        webview: {
+          html: '',
+          onDidReceiveMessage: jest.fn(),
+          postMessage: jest.fn((msg: unknown) => postedMessages.push(msg)),
+          asWebviewUri: (uri: { fsPath: string }) => uri,
+          cspSource: 'vscode-resource:',
+        },
+        onDidDispose: jest.fn(),
+        onDidChangeViewState: jest.fn(),
+        reveal: jest.fn(),
+        dispose: jest.fn(),
+      };
+
+      const PanelClass = BoardPanel as unknown as {
+        new (
+          panel: typeof fakeWebviewPanel,
+          workspaceRoot: string,
+          extensionUri: { fsPath: string }
+        ): {
+          _handleExternalCardChange(uri: { fsPath: string }): void;
+          _cardColumns: Map<string, string>;
+        };
+      };
+
+      const instance = new PanelClass(fakeWebviewPanel as never, workspaceRoot, { fsPath: '/fake/extension' } as never);
+      return {
+        handleExternalCardChange: (uri) => instance._handleExternalCardChange(uri as never),
+        cardColumns: instance._cardColumns,
+        postedMessages,
+      };
+    }
+
+    it('fires card.moved hook when a card file is externally moved to a new column', async () => {
+      const hooksModule = await import('../hooks');
+      const spy = jest.spyOn(hooksModule, 'fireHook').mockImplementation(() => {});
+
+      writeCard(boardRoot, makeCard('ext-card', { column: 'backlog', order: '0.5' }));
+
+      const panel = makePanel(workspaceRoot);
+      // Seed the cache with the old column so a move is detected.
+      panel.cardColumns.set('ext-card', 'backlog');
+
+      // Simulate external edit: change column in file.
+      const card = readCard(boardRoot, 'ext-card')!;
+      card.metadata.column = 'in-progress';
+      writeCard(boardRoot, card);
+
+      panel.handleExternalCardChange({ fsPath: path.join(boardRoot, 'cards', 'ext-card.md') });
+
+      expect(spy).toHaveBeenCalledWith(
+        boardRoot,
+        expect.anything(),
+        'card.moved',
+        expect.objectContaining({ card_id: 'ext-card', from_column: 'backlog', to_column: 'in-progress' })
+      );
+
+      spy.mockRestore();
+    });
+
+    it('does not fire card.moved hook when column is unchanged', async () => {
+      const hooksModule = await import('../hooks');
+      const spy = jest.spyOn(hooksModule, 'fireHook').mockImplementation(() => {});
+
+      writeCard(boardRoot, makeCard('stable-card', { column: 'backlog', order: '0.5' }));
+
+      const panel = makePanel(workspaceRoot);
+      panel.cardColumns.set('stable-card', 'backlog');
+
+      // No column change — same value in file.
+      panel.handleExternalCardChange({ fsPath: path.join(boardRoot, 'cards', 'stable-card.md') });
+
+      expect(spy).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), 'card.moved', expect.anything());
+
+      spy.mockRestore();
+    });
+
+    it('does not fire card.moved hook when the card is first seen (no previous column in cache)', async () => {
+      const hooksModule = await import('../hooks');
+      const spy = jest.spyOn(hooksModule, 'fireHook').mockImplementation(() => {});
+
+      writeCard(boardRoot, makeCard('new-card', { column: 'in-progress', order: '0.5' }));
+
+      const panel = makePanel(workspaceRoot);
+      // Cache is empty — first time the watcher sees this card.
+
+      panel.handleExternalCardChange({ fsPath: path.join(boardRoot, 'cards', 'new-card.md') });
+
+      expect(spy).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), 'card.moved', expect.anything());
+
+      spy.mockRestore();
+    });
+
+    it('updates _cardColumns cache to the new column after an external move', () => {
+      writeCard(boardRoot, makeCard('cache-card', { column: 'backlog', order: '0.5' }));
+
+      const panel = makePanel(workspaceRoot);
+      panel.cardColumns.set('cache-card', 'backlog');
+
+      const card = readCard(boardRoot, 'cache-card')!;
+      card.metadata.column = 'done';
+      writeCard(boardRoot, card);
+
+      panel.handleExternalCardChange({ fsPath: path.join(boardRoot, 'cards', 'cache-card.md') });
+
+      expect(panel.cardColumns.get('cache-card')).toBe('done');
+    });
+  });
+
+  // ── policy-main-branch script ─────────────────────────────────────────────
+
+  describe('policy-main-branch script', () => {
+    const scriptPath = path.join(
+      __dirname,
+      '../../.personal-kanban/scripts/policy-main-branch.js'
+    );
+
+    function runScript(stdinPayload: object, env?: NodeJS.ProcessEnv): Promise<number> {
+      return new Promise((resolve) => {
+        const { spawn } = require('child_process') as typeof import('child_process');
+        const child = spawn(process.execPath, [scriptPath], {
+          stdio: ['pipe', 'ignore', 'ignore'],
+          env: { ...process.env, ...env },
+        });
+        child.stdin.write(JSON.stringify(stdinPayload));
+        child.stdin.end();
+        child.on('close', (code) => resolve(code ?? 0));
+      });
+    }
+
+    it('exits 1 (policy violated) when on the main branch', async () => {
+      // Stub git to report 'main' by providing a fake git on PATH.
+      const fakeGitDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fake-git-'));
+      const fakeBranch = 'main';
+      const fakeGitScript = `#!/bin/sh\necho ${fakeBranch}\n`;
+      const fakeGitPath = path.join(fakeGitDir, 'git');
+      fs.writeFileSync(fakeGitPath, fakeGitScript, { mode: 0o755 });
+
+      const code = await runScript({ card_id: 'test', event: 'card.moving' }, {
+        PATH: `${fakeGitDir}:${process.env.PATH}`,
+      });
+
+      fs.rmSync(fakeGitDir, { recursive: true, force: true });
+      expect(code).toBe(1);
+    });
+
+    it('exits 1 (policy violated) when on the master branch', async () => {
+      const fakeGitDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fake-git-'));
+      const fakeGitScript = `#!/bin/sh\necho master\n`;
+      const fakeGitPath = path.join(fakeGitDir, 'git');
+      fs.writeFileSync(fakeGitPath, fakeGitScript, { mode: 0o755 });
+
+      const code = await runScript({ card_id: 'test', event: 'card.moving' }, {
+        PATH: `${fakeGitDir}:${process.env.PATH}`,
+      });
+
+      fs.rmSync(fakeGitDir, { recursive: true, force: true });
+      expect(code).toBe(1);
+    });
+
+    it('exits 0 (ok) when on a feature branch', async () => {
+      const fakeGitDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fake-git-'));
+      const fakeGitScript = `#!/bin/sh\necho feature/my-branch\n`;
+      const fakeGitPath = path.join(fakeGitDir, 'git');
+      fs.writeFileSync(fakeGitPath, fakeGitScript, { mode: 0o755 });
+
+      const code = await runScript({ card_id: 'test', event: 'card.moving' }, {
+        PATH: `${fakeGitDir}:${process.env.PATH}`,
+      });
+
+      fs.rmSync(fakeGitDir, { recursive: true, force: true });
+      expect(code).toBe(0);
+    });
+
+    it('exits 0 (ok) when git is unavailable', async () => {
+      // Provide a PATH with no git executable.
+      const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'no-git-'));
+
+      const code = await runScript({ card_id: 'test', event: 'card.moving' }, {
+        PATH: emptyDir,
+      });
+
+      fs.rmSync(emptyDir, { recursive: true, force: true });
+      expect(code).toBe(0);
+    });
+  });
 });
