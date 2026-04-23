@@ -849,6 +849,7 @@ describe('BoardPanel message handler', () => {
 
     function runScript(stdinPayload: object, env?: NodeJS.ProcessEnv): Promise<number> {
       return new Promise((resolve) => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { spawn } = require('child_process') as typeof import('child_process');
         const child = spawn(process.execPath, [scriptPath], {
           stdio: ['pipe', 'ignore', 'ignore'],
