@@ -13,12 +13,30 @@ export function getManifestPath(boardRoot: string): string {
   return path.join(boardRoot, 'manifest.json');
 }
 
+function getCardsDir(boardRoot: string): string {
+  const custom = vscode.workspace.getConfiguration('personal-kanban').get<string>('cardsFolderPath', '');
+  if (custom) {
+    const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (wsRoot) return path.resolve(wsRoot, custom);
+  }
+  return path.join(boardRoot, 'cards');
+}
+
+function getArchiveDir(boardRoot: string): string {
+  const custom = vscode.workspace.getConfiguration('personal-kanban').get<string>('archiveFolderPath', '');
+  if (custom) {
+    const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (wsRoot) return path.resolve(wsRoot, custom);
+  }
+  return path.join(boardRoot, 'archive');
+}
+
 export function getCardPath(boardRoot: string, id: string): string {
-  return path.join(boardRoot, 'cards', `${id}.md`);
+  return path.join(getCardsDir(boardRoot), `${id}.md`);
 }
 
 export function getArchivePath(boardRoot: string, id: string): string {
-  return path.join(boardRoot, 'archive', `${id}.md`);
+  return path.join(getArchiveDir(boardRoot), `${id}.md`);
 }
 
 export function boardExists(boardRoot: string): boolean {
@@ -170,7 +188,9 @@ const KNOWN_CARD_KEYS = new Set([
 
 function parseCardMd(raw: string, id: string): Card {
   const now = new Date().toISOString();
-  const match = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  // Normalise line endings so the regex works regardless of editor/OS/tool.
+  const normalised = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const match = normalised.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (!match) {
     return { id, content: raw, metadata: { created_at: now } };
   }
@@ -243,12 +263,12 @@ export function readCard(boardRoot: string, id: string): Card | null {
     return parseCardMd(fs.readFileSync(archivePath, 'utf-8'), id);
   }
   // Legacy: card in cards/{id}/{id}.md subdirectory
-  const legacyDirPath = path.join(boardRoot, 'cards', id, `${id}.md`);
+  const legacyDirPath = path.join(getCardsDir(boardRoot), id, `${id}.md`);
   if (fs.existsSync(legacyDirPath)) {
     return parseCardMd(fs.readFileSync(legacyDirPath, 'utf-8'), id);
   }
   // Legacy: .json format
-  const jsonPath = path.join(boardRoot, 'cards', `${id}.json`);
+  const jsonPath = path.join(getCardsDir(boardRoot), `${id}.json`);
   if (fs.existsSync(jsonPath)) {
     return JSON.parse(fs.readFileSync(jsonPath, 'utf-8')) as Card;
   }
@@ -256,10 +276,10 @@ export function readCard(boardRoot: string, id: string): Card | null {
 }
 
 export function writeCard(boardRoot: string, card: Card): void {
-  const folder = path.join(boardRoot, 'cards');
+  const folder = getCardsDir(boardRoot);
   fs.mkdirSync(folder, { recursive: true });
   atomicWrite(path.join(folder, `${card.id}.md`), serializeCardMd(card));
-  const jsonPath = path.join(boardRoot, 'cards', `${card.id}.json`);
+  const jsonPath = path.join(folder, `${card.id}.json`);
   if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath);
 }
 
@@ -290,7 +310,7 @@ export function deleteCardFile(boardRoot: string, id: string): void {
   if (fs.existsSync(mdPath)) fs.unlinkSync(mdPath);
   const archivePath = getArchivePath(boardRoot, id);
   if (fs.existsSync(archivePath)) fs.unlinkSync(archivePath);
-  const jsonPath = path.join(boardRoot, 'cards', `${id}.json`);
+  const jsonPath = path.join(getCardsDir(boardRoot), `${id}.json`);
   if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath);
 }
 
@@ -340,7 +360,7 @@ export function loadBoardState(boardRoot: string): {
   const cards: Record<string, Card | null> = {};
 
   // Scan all .md files in cards/ — card column membership comes from card metadata.
-  const cardsDir = path.join(boardRoot, 'cards');
+  const cardsDir = getCardsDir(boardRoot);
   if (fs.existsSync(cardsDir)) {
     for (const file of fs.readdirSync(cardsDir)) {
       if (!file.endsWith('.md')) continue;
@@ -362,13 +382,11 @@ export function loadBoardState(boardRoot: string): {
   for (const [id, card] of Object.entries(cards)) {
     if (!card) continue;
     const colId = card.metadata.column ?? defaultColumnId;
-    if (!columnBuckets[colId]) {
-      // Card references an unknown column — put it in the default column.
-      columnBuckets[defaultColumnId] = columnBuckets[defaultColumnId] ?? [];
-      columnBuckets[defaultColumnId].push({ id, sortKey: toSortKey(card) });
-    } else {
-      columnBuckets[colId].push({ id, sortKey: toSortKey(card) });
-    }
+    // Exact match first; case-insensitive fallback handles e.g. 'Done' vs 'done'.
+    const targetId = columnBuckets[colId] !== undefined
+      ? colId
+      : (Object.keys(columnBuckets).find(k => k.toLowerCase() === colId.toLowerCase()) ?? defaultColumnId);
+    columnBuckets[targetId].push({ id, sortKey: toSortKey(card) });
   }
 
   // Attach sorted card ID arrays onto each column (in-memory only; not written to manifest).

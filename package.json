@@ -76,6 +76,16 @@
           "default": ".personal-kanban",
           "description": "Name of the folder (relative to workspace root) where the kanban board data is stored."
         },
+        "personal-kanban.cardsFolderPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path (relative to workspace root) where card files are stored. Leave empty to use the default location: <boardFolderName>/cards."
+        },
+        "personal-kanban.archiveFolderPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path (relative to workspace root) where archived card files are stored. Leave empty to use the default location: <boardFolderName>/archive."
+        },
         "personal-kanban.enableHooks": {
           "type": "boolean",
           "default": true,
