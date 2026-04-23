@@ -16,6 +16,8 @@ interface MockConfig {
   tagColorTarget: string;
   showCardAge: boolean;
   boardFolderName: string;
+  cardsFolderPath: string;
+  archiveFolderPath: string;
   enableHooks: boolean;
   scripts: Record<string, unknown>;
   hooks: Record<string, string[]>;
@@ -26,6 +28,8 @@ let _mockConfig: MockConfig = {
   tagColorTarget: 'tag',
   showCardAge: true,
   boardFolderName: '.personal-kanban',
+  cardsFolderPath: '',
+  archiveFolderPath: '',
   enableHooks: true,
   scripts: {},
   hooks: {},
@@ -47,6 +51,8 @@ export function resetMockConfig(): void {
     tagColorTarget: 'tag',
     showCardAge: true,
     boardFolderName: '.personal-kanban',
+    cardsFolderPath: '',
+    archiveFolderPath: '',
     enableHooks: true,
     scripts: {},
     hooks: {},
@@ -68,6 +74,7 @@ export const workspace = {
   getConfiguration(_section?: string) {
     return configurationProxy;
   },
+  workspaceFolders: undefined as { uri: { fsPath: string } }[] | undefined,
   createFileSystemWatcher() {
     return {
       onDidChange: jest.fn(),
