@@ -1,0 +1,135 @@
+{
+  "version": 1,
+  "name": "personal-kanban project board",
+  "columns": [
+    {
+      "id": "backlog",
+      "label": "Backlog",
+      "index": 0,
+      "wip_limit": null,
+      "policies": [],
+      "cards": []
+    },
+    {
+      "id": "refined",
+      "label": "Refined",
+      "index": 1,
+      "wip_limit": null,
+      "policies": []
+    },
+    {
+      "id": "planning",
+      "label": "Planning",
+      "index": 2,
+      "wip_limit": null,
+      "policies": []
+    },
+    {
+      "id": "in-progress",
+      "label": "In Progress",
+      "index": 3,
+      "wip_limit": 2,
+      "policies": ["main-branch"],
+      "cards": []
+    },
+    {
+      "id": "review",
+      "label": "Review",
+      "index": 4,
+      "wip_limit": null,
+      "policies": [
+        "entry:review"
+      ],
+      "cards": []
+    },
+    {
+      "id": "done",
+      "label": "Done",
+      "index": 5,
+      "wip_limit": null,
+      "policies": [
+        "entry:done"
+      ],
+      "cards": ["20260420-c3f1", "20260420-a1c2", "20260420-b3d4", "20260420-c5e6", "20260420-d7f8", "20260420-e9a0", "20260420-f2b3", "20260420-07e2", "20260420-4a59"]
+    }
+  ],
+  "policies": {
+    "wip-limit": {
+      "description": "The WIP limit of the destination column must not be exceeded.",
+      "message": "This column is at its WIP limit. Finish or unblock existing work before pulling something new. Click 'Continue Anyway' to override, or cancel to stay focused.",
+      "script": "scripts/policy-wip-limit.js"
+    },
+    "no-pullback": {
+      "description": "Cards must not move backward in the value stream. If rework is needed, add a note to the card explaining why.",
+      "message": "You're moving a card backward. If rework is needed, add a note to the card explaining why. Click 'Continue Anyway' to proceed, or cancel and add a note first.",
+      "script": "scripts/policy-no-pullback.js"
+    },
+    "entry:review": {
+      "description": "All acceptance criteria must be met from the worker's perspective before a card may enter Review.",
+      "message": "Before moving to Review: have you met all acceptance criteria from your perspective? Click 'Continue Anyway' to confirm and proceed, or cancel to keep working.",
+      "script": "scripts/policy-entry-review.js"
+    },
+    "entry:done": {
+      "description": "A card may only enter Done after a second person (or the same person after a pause) has verified the outcome.",
+      "message": "Before marking as Done: has the outcome been independently verified? Click 'Continue Anyway' to confirm acceptance, or cancel if verification is still needed.",
+      "script": "scripts/policy-entry-done.js"
+    },
+    "main-branch": {
+      "description": "Cards should not be implemented on the main or master branch. Check out a feature branch before starting work.",
+      "message": "You are on the 'main' branch. Work on a dedicated feature branch instead. Click 'Continue Anyway' to proceed on main, or cancel and switch branches first.",
+      "script": "scripts/policy-main-branch.js"
+    }
+  },
+  "board_policies": [
+    "wip-limit",
+    "no-pullback"
+  ],
+  "column_stamps": {
+    "active_at": "in-progress",
+    "done_at": "done"
+  },
+  "policy_bypass_tags": [
+    "no-policy",
+    "expedite"
+  ],
+  "scripts": {
+    "policy-overridden": {
+      "file": "scripts/policy-overridden.js"
+    },
+    "card-created": {
+      "file": "scripts/card-created.js"
+    },
+    "card-edited": {
+      "file": "scripts/card-edited.js"
+    },
+    "card-deleted": {
+      "file": "scripts/card-deleted.js"
+    },
+    "card-moved": {
+      "file": "scripts/card-moved.js"
+    },
+    "cards-archived": {
+      "file": "scripts/cards-archived.js"
+    }
+  },
+  "hooks": {
+    "policy.overridden": [
+      "policy-overridden"
+    ],
+    "card.created": [
+      "card-created"
+    ],
+    "card.edited": [
+      "card-edited"
+    ],
+    "card.deleted": [
+      "card-deleted"
+    ],
+    "card.moved": [
+      "card-moved"
+    ],
+    "cards.archived": [
+      "cards-archived"
+    ]
+  }
+}
