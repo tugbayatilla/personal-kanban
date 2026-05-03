@@ -119,6 +119,9 @@
     "typecheck": "tsc --noEmit",
     "test": "jest"
   },
+  "dependencies": {
+    "@personal-kanban/core": "*"
+  },
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/node": "^18.0.0",

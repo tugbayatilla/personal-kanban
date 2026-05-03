@@ -1,7 +1,6 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import {
-  getBoardRoot,
   readManifest,
   readCard,
   writeCard,
@@ -12,9 +11,12 @@ import {
   withLock,
   calcOrder,
   getGitUser,
-} from './io';
-import { Card, WebviewMessage } from './types';
-import { fireHook, runPolicyScript, logInfo, extractTitle } from './hooks';
+  fireHook,
+  runPolicyScript,
+  extractTitle,
+} from '@personal-kanban/core';
+import type { Card, WebviewMessage, Logger } from '@personal-kanban/core';
+import { getBoardRoot } from './vsCodeIo';
 
 export class BoardPanel {
   public static currentPanel: BoardPanel | undefined;
@@ -22,13 +24,14 @@ export class BoardPanel {
   private readonly _panel: vscode.WebviewPanel;
   private readonly _boardRoot: string;
   private readonly _extensionUri: vscode.Uri;
+  private readonly _logger: Logger;
   private _disposables: vscode.Disposable[] = [];
   /** Suppress watcher-triggered reloads until this timestamp (ms). */
   private _suppressWatchUntil = 0;
   /** Tracks the last known column for each card id — used to detect external column changes. */
   private _cardColumns = new Map<string, string>();
 
-  public static createOrShow(context: vscode.ExtensionContext, workspaceRoot: string, channel: vscode.OutputChannel): void {
+  public static createOrShow(context: vscode.ExtensionContext, workspaceRoot: string, channel: vscode.OutputChannel, logger: Logger): void {
     if (BoardPanel.currentPanel) {
       BoardPanel.currentPanel._panel.reveal();
       channel.show(true);
@@ -44,14 +47,15 @@ export class BoardPanel {
         localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media')],
       }
     );
-    BoardPanel.currentPanel = new BoardPanel(panel, workspaceRoot, context.extensionUri);
+    BoardPanel.currentPanel = new BoardPanel(panel, workspaceRoot, context.extensionUri, logger);
     context.subscriptions.push({ dispose: () => BoardPanel.currentPanel?._dispose() });
     channel.show(true);
   }
 
-  private constructor(panel: vscode.WebviewPanel, workspaceRoot: string, extensionUri: vscode.Uri) {
+  private constructor(panel: vscode.WebviewPanel, workspaceRoot: string, extensionUri: vscode.Uri, logger: Logger) {
     this._panel = panel;
     this._boardRoot = getBoardRoot(workspaceRoot);
+    this._logger = logger;
     this._extensionUri = extensionUri;
 
     this._panel.onDidDispose(() => this._dispose(), null, this._disposables);
@@ -137,7 +141,7 @@ export class BoardPanel {
           card_title: '',
           column: msg.columnId,
           card_path: `cards/${id}.md`,
-        });
+        }, this._logger);
         this._sendState(id);
         break;
       }
@@ -154,7 +158,7 @@ export class BoardPanel {
             card_id: msg.id,
             card_title: extractTitle(msg.content),
             card_path: `cards/${msg.id}.md`,
-          });
+          }, this._logger);
         }
         this._sendState();
         break;
@@ -176,7 +180,7 @@ export class BoardPanel {
           card_id: msg.id,
           card_title: deletedTitle,
           last_column: deletedFromColumn,
-        });
+        }, this._logger);
         this._sendState();
         break;
       }
@@ -212,12 +216,12 @@ export class BoardPanel {
           : null;
 
         if (bypassedBy) {
-          logInfo(`[policy.bypassed] card=${msg.id} tag=#${bypassedBy} from=${msg.fromColumn} to=${msg.toColumn} — all policy checks skipped`);
+          this._logger.info(`[policy.bypassed] card=${msg.id} tag=#${bypassedBy} from=${msg.fromColumn} to=${msg.toColumn} — all policy checks skipped`);
         }
 
         const violations = bypassedBy
           ? []
-          : await checkPolicies(this._boardRoot, preManifest, msg.fromColumn, msg.toColumn, basePayload);
+          : await checkPolicies(this._boardRoot, preManifest, msg.fromColumn, msg.toColumn, basePayload, this._logger);
 
         // Step 2: For each violation ask for approval in order. Any cancellation aborts.
         for (const violation of violations) {
@@ -280,7 +284,7 @@ export class BoardPanel {
               to_column: msg.toColumn,
               policy: violation.policy,
               message: violation.message,
-            });
+            }, this._logger);
           }
 
           fireHook(this._boardRoot, manifest, 'card.moved', {
@@ -290,7 +294,7 @@ export class BoardPanel {
             to_column: msg.toColumn,
             branch: movedCard.metadata.branch,
             card_path: `cards/${msg.id}.md`,
-          });
+          }, this._logger);
         }
 
         this._sendState();
@@ -334,7 +338,7 @@ export class BoardPanel {
           }
           return manifest;
         });
-        fireHook(this._boardRoot, m4, 'cards.archived', { column: m4.column_stamps?.done_at ?? 'done' });
+        fireHook(this._boardRoot, m4, 'cards.archived', { column: m4.column_stamps?.done_at ?? 'done' }, this._logger);
         this._sendState();
         break;
       }
@@ -397,7 +401,7 @@ export class BoardPanel {
         to_column: newColumn,
         branch: card.metadata.branch,
         card_path: `cards/${id}.md`,
-      });
+      }, this._logger);
     }
 
     this._sendState();
@@ -471,10 +475,11 @@ interface PolicyViolation {
  */
 async function checkPolicies(
   boardRoot: string,
-  manifest: import('./types').Manifest,
+  manifest: import('@personal-kanban/core').Manifest,
   fromColumn: string,
   toColumn: string,
-  basePayload: Record<string, unknown>
+  basePayload: Record<string, unknown>,
+  logger: import('@personal-kanban/core').Logger
 ): Promise<PolicyViolation[]> {
   const registry = manifest.policies ?? {};
   const columns = manifest.columns.map((c) => c.id);
@@ -490,7 +495,7 @@ async function checkPolicies(
     if (!def?.script) { continue; }
 
     const payload = { ...basePayload, columns, policy: key };
-    const violated = await runPolicyScript(boardRoot, def.script, payload);
+    const violated = await runPolicyScript(boardRoot, def.script, payload, logger);
     if (violated) {
       violations.push({ policy: key, message: def.message });
     }

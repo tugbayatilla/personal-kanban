@@ -3,21 +3,23 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { BoardPanel } from './BoardPanel';
 import { MetricsPanel } from './MetricsPanel';
-import { getBoardRoot, boardExists, readManifest, writeManifest, withLock } from './io';
-import { loadAllCardFiles, computeMetrics } from './metrics';
-import { initLogger } from './hooks';
-import { Manifest } from './types';
+import { boardExists, readManifest, writeManifest, withLock, loadAllCardFiles, computeMetrics } from '@personal-kanban/core';
+import { getBoardRoot } from './vsCodeIo';
+import type { Logger, Manifest } from '@personal-kanban/core';
 
 export function activate(context: vscode.ExtensionContext): void {
   const channel = vscode.window.createOutputChannel('Personal Kanban');
   context.subscriptions.push(channel);
-  initLogger(channel);
+  const logger: Logger = {
+    info: (msg) => channel.appendLine(`[INFO] ${msg}`),
+    error: (msg) => channel.appendLine(`[ERROR] ${msg}`),
+  };
 
   context.subscriptions.push(
     vscode.commands.registerCommand('personal-kanban.initBoard', () => initBoard(context)),
     vscode.commands.registerCommand('personal-kanban.openBoard', () => {
       const root = getWorkspaceRoot();
-      if (root) BoardPanel.createOrShow(context, root, channel);
+      if (root) BoardPanel.createOrShow(context, root, channel, logger);
     }),
     vscode.commands.registerCommand('personal-kanban.openMetrics', () => {
       const root = getWorkspaceRoot();
