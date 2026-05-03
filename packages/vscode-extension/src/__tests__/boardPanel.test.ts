@@ -31,9 +31,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { resetMockConfig, setMockConfig, window as mockWindow } from './__mocks__/vscode';
-import { readCard, writeCard } from '../io';
-import { initLogger } from '../hooks';
-import { Card, WebviewMessage } from '../types';
+import { readCard, writeCard } from '@personal-kanban/core';
+import type { Card, WebviewMessage, Logger } from '@personal-kanban/core';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -140,16 +139,18 @@ async function callHandler(
   };
 
   const fakeExtensionUri = { fsPath: '/fake/extension' };
+  const mockLogger: Logger = { info: jest.fn(), error: jest.fn() };
 
   const PanelClass = BoardPanel as unknown as {
     new (
       panel: typeof fakeWebviewPanel,
       workspaceRoot: string,
-      extensionUri: typeof fakeExtensionUri
+      extensionUri: typeof fakeExtensionUri,
+      logger: Logger
     ): { _handleMessage(msg: WebviewMessage): Promise<void> };
   };
 
-  const instance = new PanelClass(fakeWebviewPanel as never, workspaceRoot, fakeExtensionUri as never);
+  const instance = new PanelClass(fakeWebviewPanel as never, workspaceRoot, fakeExtensionUri as never, mockLogger);
   await instance._handleMessage(msg);
 }
 
@@ -169,7 +170,7 @@ describe('BoardPanel message handler', () => {
     writeMinimalManifest(boardRoot);
     fs.mkdirSync(path.join(boardRoot, 'cards'), { recursive: true });
 
-    initLogger({ appendLine: () => {}, show: () => {}, dispose: () => {} } as never);
+    // Logger is now injected via BoardPanel constructor — no global initLogger needed.
   });
 
   afterEach(() => {
@@ -744,18 +745,21 @@ describe('BoardPanel message handler', () => {
         dispose: jest.fn(),
       };
 
+      const mockLogger: Logger = { info: jest.fn(), error: jest.fn() };
+
       const PanelClass = BoardPanel as unknown as {
         new (
           panel: typeof fakeWebviewPanel,
           workspaceRoot: string,
-          extensionUri: { fsPath: string }
+          extensionUri: { fsPath: string },
+          logger: Logger
         ): {
           _handleExternalCardChange(uri: { fsPath: string }): void;
           _cardColumns: Map<string, string>;
         };
       };
 
-      const instance = new PanelClass(fakeWebviewPanel as never, workspaceRoot, { fsPath: '/fake/extension' } as never);
+      const instance = new PanelClass(fakeWebviewPanel as never, workspaceRoot, { fsPath: '/fake/extension' } as never, mockLogger);
       return {
         handleExternalCardChange: (uri) => instance._handleExternalCardChange(uri as never),
         cardColumns: instance._cardColumns,
@@ -764,7 +768,7 @@ describe('BoardPanel message handler', () => {
     }
 
     it('fires card.moved hook when a card file is externally moved to a new column', async () => {
-      const hooksModule = await import('../hooks');
+      const hooksModule = await import('@personal-kanban/core/hooks');
       const spy = jest.spyOn(hooksModule, 'fireHook').mockImplementation(() => {});
 
       writeCard(boardRoot, makeCard('ext-card', { column: 'backlog', order: '0.5' }));
@@ -784,14 +788,15 @@ describe('BoardPanel message handler', () => {
         boardRoot,
         expect.anything(),
         'card.moved',
-        expect.objectContaining({ card_id: 'ext-card', from_column: 'backlog', to_column: 'in-progress' })
+        expect.objectContaining({ card_id: 'ext-card', from_column: 'backlog', to_column: 'in-progress' }),
+        expect.anything()
       );
 
       spy.mockRestore();
     });
 
     it('does not fire card.moved hook when column is unchanged', async () => {
-      const hooksModule = await import('../hooks');
+      const hooksModule = await import('@personal-kanban/core/hooks');
       const spy = jest.spyOn(hooksModule, 'fireHook').mockImplementation(() => {});
 
       writeCard(boardRoot, makeCard('stable-card', { column: 'backlog', order: '0.5' }));
@@ -802,13 +807,13 @@ describe('BoardPanel message handler', () => {
       // No column change — same value in file.
       panel.handleExternalCardChange({ fsPath: path.join(boardRoot, 'cards', 'stable-card.md') });
 
-      expect(spy).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), 'card.moved', expect.anything());
+      expect(spy).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), 'card.moved', expect.anything(), expect.anything());
 
       spy.mockRestore();
     });
 
     it('does not fire card.moved hook when the card is first seen (no previous column in cache)', async () => {
-      const hooksModule = await import('../hooks');
+      const hooksModule = await import('@personal-kanban/core/hooks');
       const spy = jest.spyOn(hooksModule, 'fireHook').mockImplementation(() => {});
 
       writeCard(boardRoot, makeCard('new-card', { column: 'in-progress', order: '0.5' }));
@@ -818,7 +823,7 @@ describe('BoardPanel message handler', () => {
 
       panel.handleExternalCardChange({ fsPath: path.join(boardRoot, 'cards', 'new-card.md') });
 
-      expect(spy).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), 'card.moved', expect.anything());
+      expect(spy).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), 'card.moved', expect.anything(), expect.anything());
 
       spy.mockRestore();
     });

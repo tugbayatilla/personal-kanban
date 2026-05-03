@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { getBoardRoot, readManifest } from './io';
-import { loadAllCardFiles } from './metrics';
+import { readManifest, loadAllCardFiles } from '@personal-kanban/core';
+import { getBoardRoot } from './vsCodeIo';
 
 export class MetricsPanel {
   public static currentPanel: MetricsPanel | undefined;

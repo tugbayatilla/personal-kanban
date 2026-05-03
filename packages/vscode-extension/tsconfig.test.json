@@ -2,7 +2,11 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "rootDir": ".",
-    "types": ["jest", "node"]
+    "types": ["jest", "node"],
+    "paths": {
+      "@personal-kanban/core": ["../kanban-core/src/index.ts"],
+      "@personal-kanban/core/hooks": ["../kanban-core/src/hooks.ts"]
+    }
   },
   "include": ["src"]
 }

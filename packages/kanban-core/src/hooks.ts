@@ -1,21 +1,7 @@
 import * as path from 'path';
 import { spawn } from 'child_process';
-import * as vscode from 'vscode';
+import type { Logger } from './types';
 import { Manifest } from './types';
-
-let _channel: vscode.OutputChannel | undefined;
-
-export function initLogger(channel: vscode.OutputChannel): void {
-  _channel = channel;
-}
-
-function log(line: string): void {
-  _channel?.appendLine(`[${new Date().toISOString()}] ${line}`);
-}
-
-export function logInfo(line: string): void {
-  log(line);
-}
 
 export function extractTitle(content: string): string {
   for (const line of content.split('\n')) {
@@ -40,7 +26,8 @@ function runScript(
   boardRoot: string,
   scriptPath: string,
   fullPayload: string,
-  logContext: string
+  logContext: string,
+  logger: Logger
 ): Promise<number | null> {
   return new Promise((resolve) => {
     const absScript = path.resolve(boardRoot, scriptPath);
@@ -51,7 +38,7 @@ function runScript(
         stdio: ['pipe', 'ignore', 'ignore'],
       });
     } catch {
-      log(`[hook.failed] ${logContext} → ${scriptPath} (spawn error)`);
+      logger.info(`[hook.failed] ${logContext} → ${scriptPath} (spawn error)`);
       resolve(null);
       return;
     }
@@ -61,15 +48,15 @@ function runScript(
 
     child.on('close', (code: number | null) => {
       if (code === 0 || code === null) {
-        log(`[hook.fired] ${logContext} → ${scriptPath}`);
+        logger.info(`[hook.fired] ${logContext} → ${scriptPath}`);
       } else {
-        log(`[hook.failed] ${logContext} → ${scriptPath} (exit ${code})`);
+        logger.info(`[hook.failed] ${logContext} → ${scriptPath} (exit ${code})`);
       }
       resolve(code);
     });
 
     child.on('error', () => {
-      log(`[hook.failed] ${logContext} → ${scriptPath} (spawn error)`);
+      logger.info(`[hook.failed] ${logContext} → ${scriptPath} (spawn error)`);
       resolve(null);
     });
   });
@@ -88,7 +75,8 @@ function runScript(
 export function runPolicyScript(
   boardRoot: string,
   scriptPath: string,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  logger: Logger
 ): Promise<boolean> {
   return new Promise((resolve) => {
     const absScript = path.resolve(boardRoot, scriptPath);
@@ -101,7 +89,7 @@ export function runPolicyScript(
         stdio: ['pipe', 'ignore', 'ignore'],
       });
     } catch {
-      log(`[policy.check.failed] ${scriptPath} (spawn error)`);
+      logger.info(`[policy.check.failed] ${scriptPath} (spawn error)`);
       resolve(false);
       return;
     }
@@ -111,12 +99,12 @@ export function runPolicyScript(
 
     child.on('close', (code: number | null) => {
       const violated = code !== null && code !== 0;
-      log(`[policy.check] ${scriptPath} → exit ${code} (${violated ? 'violated' : 'ok'})`);
+      logger.info(`[policy.check] ${scriptPath} → exit ${code} (${violated ? 'violated' : 'ok'})`);
       resolve(violated);
     });
 
     child.on('error', () => {
-      log(`[policy.check.failed] ${scriptPath} (spawn error)`);
+      logger.info(`[policy.check.failed] ${scriptPath} (spawn error)`);
       resolve(false);
     });
   });
@@ -142,10 +130,11 @@ export function fireHook(
   boardRoot: string,
   manifest: Manifest,
   event: string,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  logger: Logger,
+  options?: { enableHooks?: boolean; notifications?: boolean }
 ): void {
-  const config = vscode.workspace.getConfiguration('personal-kanban');
-  const enabled = config.get<boolean>('enableHooks', true);
+  const enabled = options?.enableHooks ?? true;
   if (!enabled) { return; }
 
   const scriptNames = manifest.hooks[event];
@@ -153,7 +142,7 @@ export function fireHook(
     return;
   }
 
-  const notifications = config.get<boolean>('notifications', true);
+  const notifications = options?.notifications ?? true;
   const fullPayload = JSON.stringify({
     event,
     timestamp: new Date().toISOString(),
@@ -168,14 +157,14 @@ export function fireHook(
     for (const scriptName of scriptNames) {
       const scriptDef = manifest.scripts?.[scriptName];
       if (!scriptDef) {
-        log(`[hook.failed] ${context} → ${scriptName} (not defined in manifest.scripts)`);
+        logger.info(`[hook.failed] ${context} → ${scriptName} (not defined in manifest.scripts)`);
         continue;
       }
 
-      const code = await runScript(boardRoot, scriptDef.file, fullPayload, context);
+      const code = await runScript(boardRoot, scriptDef.file, fullPayload, context, logger);
 
       if (code !== null && code !== 0) {
-        log(`[hook.stopped] ${context} → chain halted by ${scriptDef.file} (exit ${code})`);
+        logger.info(`[hook.stopped] ${context} → chain halted by ${scriptDef.file} (exit ${code})`);
         break;
       }
     }

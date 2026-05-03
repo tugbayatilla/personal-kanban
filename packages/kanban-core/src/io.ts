@@ -1,12 +1,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import * as vscode from 'vscode';
 import { Card, Manifest } from './types';
 
-export function getBoardRoot(workspaceRoot: string): string {
-  const folderName = vscode.workspace.getConfiguration('personal-kanban').get<string>('boardFolderName', '.personal-kanban');
-  return path.join(workspaceRoot, folderName);
+export function getBoardRoot(cwd?: string): string {
+  return path.join(cwd ?? process.cwd(), '.personal-kanban');
 }
 
 export function getManifestPath(boardRoot: string): string {
@@ -14,20 +12,10 @@ export function getManifestPath(boardRoot: string): string {
 }
 
 function getCardsDir(boardRoot: string): string {
-  const custom = vscode.workspace.getConfiguration('personal-kanban').get<string>('cardsFolderPath', '');
-  if (custom) {
-    const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (wsRoot) return path.resolve(wsRoot, custom);
-  }
   return path.join(boardRoot, 'cards');
 }
 
 function getArchiveDir(boardRoot: string): string {
-  const custom = vscode.workspace.getConfiguration('personal-kanban').get<string>('archiveFolderPath', '');
-  if (custom) {
-    const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (wsRoot) return path.resolve(wsRoot, custom);
-  }
   return path.join(boardRoot, 'archive');
 }
 
@@ -88,23 +76,18 @@ export function readManifest(boardRoot: string): Manifest {
     if (!data.policies) data.policies = {};
     if (!data.board_policies) data.board_policies = [];
     if (!data.policy_bypass_tags) data.policy_bypass_tags = [];
-    // Migrate scripts/hooks from VSCode settings into manifest on first read
     if (!data.scripts || Object.keys(data.scripts).length === 0) {
-      const cfg = vscode.workspace.getConfiguration('personal-kanban');
-      data.scripts = cfg.get<Manifest['scripts']>('scripts', {});
+      data.scripts = {};
     }
     if (!data.hooks || Object.keys(data.hooks).length === 0) {
-      const cfg = vscode.workspace.getConfiguration('personal-kanban');
-      data.hooks = cfg.get<Manifest['hooks']>('hooks', {});
+      data.hooks = {};
     }
     data.version = 1;
   }
 
-  // Tags, tagColorTarget, and showCardAge remain in VSCode settings (workspace-level config).
-  const config = vscode.workspace.getConfiguration('personal-kanban');
-  data.tags = config.get<Manifest['tags']>('tags', {});
-  data.tagColorTarget = config.get<Manifest['tagColorTarget']>('tagColorTarget', 'tag');
-  data.showCardAge = config.get<boolean>('showCardAge', true);
+  // Provide defaults for optional fields if missing
+  if (!data.tags) data.tags = {};
+  if (!data.tagColorTarget) data.tagColorTarget = 'tag';
 
   return data as Manifest;
 }

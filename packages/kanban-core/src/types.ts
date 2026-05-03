@@ -39,6 +39,7 @@ export interface Manifest {
   hooks: Record<string, string[]>;
   tagColorTarget: 'tag' | 'card-border' | 'card-background';
   showCardAge?: boolean;
+  theme?: string;
 }
 
 export interface CardMetadata {
@@ -78,3 +79,8 @@ export type WebviewMessage =
 export type ExtensionMessage =
   | { type: 'setState'; manifest: Manifest; cards: Record<string, Card | null> }
   | { type: 'setState'; manifest: null; cards: Record<string, never>; error: string };
+
+export interface Logger {
+  info(message: string): void;
+  error(message: string): void;
+}

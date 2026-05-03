@@ -3,21 +3,22 @@
  *
  * Coverage:
  *   - extractTitle: pure function, various markdown heading scenarios
- *   - fireHook: respects enableHooks config, handles missing hook definitions,
+ *   - fireHook: respects enableHooks option, handles missing hook definitions,
  *     spawns the correct script and delivers a JSON payload via stdin
  */
 
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { resetMockConfig, setMockConfig } from './__mocks__/vscode';
-import { extractTitle, fireHook, initLogger } from '../hooks';
-import { Manifest } from '../types';
+import { extractTitle, fireHook } from '../hooks';
+import { Manifest, Logger } from '../types';
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
+const mockLogger: Logger = { info: jest.fn(), error: jest.fn() };
+
 function makeTempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'pk-hooks-test-'));
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'pk-core-hooks-test-'));
 }
 
 function removeTempDir(dir: string): void {
@@ -76,7 +77,6 @@ describe('extractTitle', () => {
   });
 
   it('does not match a line that starts with # but has no space after it', () => {
-    // "# " prefix is required — "##Title" has two hashes, "#Title" has no space.
     const content = '#NoSpace\n\nBody.';
     expect(extractTitle(content)).toBe('');
   });
@@ -89,50 +89,42 @@ describe('fireHook', () => {
 
   beforeEach(() => {
     boardRoot = makeTempDir();
-    resetMockConfig();
-    // Silence the logger so test output stays clean.
-    initLogger({ appendLine: () => {}, show: () => {}, dispose: () => {} } as never);
+    jest.clearAllMocks();
   });
 
   afterEach(() => removeTempDir(boardRoot));
 
-  it('does nothing when hooks are disabled in configuration', () => {
-    setMockConfig({ enableHooks: false });
+  it('does nothing when hooks are disabled via options', () => {
     const manifest = makeManifest({ hooks: { 'card.created': ['my-script'] } });
 
     // If fireHook tried to spawn, it would throw because the script doesn't exist.
     // No throw = hooks were correctly skipped.
-    expect(() => fireHook(boardRoot, manifest, 'card.created', {})).not.toThrow();
+    expect(() => fireHook(boardRoot, manifest, 'card.created', {}, mockLogger, { enableHooks: false })).not.toThrow();
   });
 
   it('does nothing when no hooks are registered for the event', () => {
-    setMockConfig({ enableHooks: true });
     const manifest = makeManifest({ hooks: {} });
 
-    expect(() => fireHook(boardRoot, manifest, 'card.created', {})).not.toThrow();
+    expect(() => fireHook(boardRoot, manifest, 'card.created', {}, mockLogger)).not.toThrow();
   });
 
   it('does nothing when the event hook list is empty', () => {
-    setMockConfig({ enableHooks: true });
     const manifest = makeManifest({ hooks: { 'card.created': [] } });
 
-    expect(() => fireHook(boardRoot, manifest, 'card.created', {})).not.toThrow();
+    expect(() => fireHook(boardRoot, manifest, 'card.created', {}, mockLogger)).not.toThrow();
   });
 
   it('logs a failure (does not throw) when a named script is not defined in manifest.scripts', () => {
-    setMockConfig({ enableHooks: true });
     const manifest = makeManifest({
       hooks: { 'card.created': ['undefined-script'] },
       scripts: {},
     });
 
     // Should not throw — hooks fire-and-forget; missing definitions are logged.
-    expect(() => fireHook(boardRoot, manifest, 'card.created', { card_id: 'x' })).not.toThrow();
+    expect(() => fireHook(boardRoot, manifest, 'card.created', { card_id: 'x' }, mockLogger)).not.toThrow();
   });
 
   it('spawns the correct Node.js script and receives a JSON payload via stdin', (done) => {
-    setMockConfig({ enableHooks: true });
-
     // Write a hook script that writes its stdin payload to a file so we can inspect it.
     const payloadCapturePath = path.join(boardRoot, 'captured-payload.json');
     const scriptContent = `
@@ -156,7 +148,7 @@ process.stdin.on('end', () => {
       card_id:     'test-card-01',
       from_column: 'backlog',
       to_column:   'in-progress',
-    });
+    }, mockLogger);
 
     // Give the child process time to run and write the file.
     setTimeout(() => {
@@ -174,8 +166,6 @@ process.stdin.on('end', () => {
   }, 5000);
 
   it('spawns scripts for all hook names registered for the same event', (done) => {
-    setMockConfig({ enableHooks: true });
-
     const touch1 = path.join(boardRoot, 'touched-1.txt');
     const touch2 = path.join(boardRoot, 'touched-2.txt');
 
@@ -193,7 +183,7 @@ process.stdin.on('end', () => {
       },
     });
 
-    fireHook(boardRoot, manifest, 'card.deleted', { card_id: 'del-01' });
+    fireHook(boardRoot, manifest, 'card.deleted', { card_id: 'del-01' }, mockLogger);
 
     setTimeout(() => {
       expect(fs.existsSync(touch1)).toBe(true);
