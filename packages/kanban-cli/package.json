@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "CLI for personal-kanban board",
   "bin": {
-    "kanban": "./dist/index.js"
+    "kanban": "./dist/index.js",
+    "pkan": "./dist/index.js"
   },
   "main": "./dist/index.js",
   "scripts": {
