@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import {
@@ -82,6 +83,17 @@ export class BoardPanel {
         if (card?.metadata.column) this._cardColumns.set(id, card.metadata.column);
       }
       this._panel.webview.postMessage({ type: 'setState', manifest, cards, editCardId });
+
+      // After sending setState, handle custom theme injection
+      if (manifest.theme?.endsWith('.css')) {
+        const themePath = path.join(this._boardRoot, '..', manifest.theme);
+        try {
+          const css = fs.readFileSync(themePath, 'utf8');
+          this._panel.webview.postMessage({ type: 'injectTheme', css });
+        } catch {
+          // Custom theme file not found — silently fall back to default
+        }
+      }
     } catch (err) {
       this._panel.webview.postMessage({
         type: 'setState',
@@ -423,14 +435,26 @@ export class BoardPanel {
     const scriptUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this._extensionUri, 'media', 'board.js')
     );
+    const defaultThemeUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'media', 'themes', 'default.css')
+    );
+    const compactThemeUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'media', 'themes', 'compact.css')
+    );
+    const minimalThemeUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'media', 'themes', 'minimal.css')
+    );
     return /* html */ `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src ${webview.cspSource};">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource};">
 <title>Kanban Board</title>
 <link rel="stylesheet" href="${cssUri}">
+<link rel="stylesheet" href="${defaultThemeUri}">
+<link rel="stylesheet" href="${compactThemeUri}">
+<link rel="stylesheet" href="${minimalThemeUri}">
 </head>
 <body>
 <div id="board-root">
