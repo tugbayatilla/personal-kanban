@@ -24,7 +24,6 @@ export function registerAdd(program: Command): void {
         const id = generateId();
         const now = new Date().toISOString();
         const tags = opts.tag ? [opts.tag.startsWith('#') ? opts.tag : '#' + opts.tag] : [];
-        const tagLine = tags.length > 0 ? `\ntags: ${tags.join(', ')}\n` : '';
         const card: Card = {
           id,
           content: `# ${title}\n`,

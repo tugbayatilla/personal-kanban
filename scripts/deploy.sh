@@ -92,8 +92,10 @@ ok "vscode-extension built"
 
 # ── 5. Run all tests ──────────────────────────────────────────────────────────
 step "Running tests..."
+set +e
 npm test --workspaces --if-present 2>&1 | tee /tmp/pkan-test-output.txt
-FAIL_COUNT=$(grep -oP '\d+ failed' /tmp/pkan-test-output.txt | awk '{s+=$1} END {print s+0}')
+set -e
+FAIL_COUNT=$(grep '^Tests:' /tmp/pkan-test-output.txt | grep -oE '[0-9]+ failed' | awk '{s+=$1} END {print s+0}')
 if [[ "$FAIL_COUNT" -gt 2 ]]; then
   abort "Tests failed ($FAIL_COUNT failures, expected at most 2 pre-existing). Fix before deploying."
 elif [[ "$FAIL_COUNT" -gt 0 ]]; then

@@ -4,6 +4,28 @@
   "description": "Shared board logic for personal-kanban",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "default": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./hooks": {
+      "require": "./dist/hooks.js",
+      "default": "./dist/hooks.js",
+      "types": "./dist/hooks.d.ts"
+    },
+    "./io": {
+      "require": "./dist/io.js",
+      "default": "./dist/io.js",
+      "types": "./dist/io.d.ts"
+    },
+    "./types": {
+      "require": "./dist/types.js",
+      "default": "./dist/types.js",
+      "types": "./dist/types.d.ts"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "jest --config jest.config.js",

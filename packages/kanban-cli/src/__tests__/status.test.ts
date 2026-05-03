@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-var-requires */
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -77,7 +78,7 @@ describe('status command', () => {
     writeCard(boardRoot, makeCard('card-002', 'backlog'));
 
     // Call status by directly importing and calling the action
-    const { loadBoardState, getBoardRoot } = require('@personal-kanban/core');
+    const { loadBoardState } = require('@personal-kanban/core');
     const state = loadBoardState(boardRoot);
 
     // Simulate status output
