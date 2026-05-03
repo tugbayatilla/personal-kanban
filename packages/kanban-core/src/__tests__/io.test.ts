@@ -18,9 +18,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { resetMockConfig, setMockConfig } from './__mocks__/vscode';
 
-// io.ts is imported AFTER the vscode mock is wired up via jest.config.js moduleNameMapper.
 import {
   readCard,
   writeCard,
@@ -34,7 +32,7 @@ import { Card } from '../types';
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
 function makeTempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'pk-test-'));
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'pk-core-test-'));
 }
 
 function removeTempDir(dir: string): void {
@@ -47,12 +45,14 @@ function writeMinimalManifest(boardRoot: string, overrides: Partial<object> = {}
     version: 1,
     name: 'Test Board',
     columns: [
-      { id: 'backlog',     label: 'Backlog',      index: 0, wip_limit: null, policies: {} },
-      { id: 'in-progress', label: 'In Progress',  index: 1, wip_limit: null, policies: {} },
-      { id: 'done',        label: 'Done',          index: 2, wip_limit: null, policies: {} },
+      { id: 'backlog',     label: 'Backlog',      index: 0, wip_limit: null, policies: [] },
+      { id: 'in-progress', label: 'In Progress',  index: 1, wip_limit: null, policies: [] },
+      { id: 'done',        label: 'Done',          index: 2, wip_limit: null, policies: [] },
     ],
     scripts: {},
     hooks: {},
+    tags: {},
+    tagColorTarget: 'tag',
     ...overrides,
   };
   fs.mkdirSync(boardRoot, { recursive: true });
@@ -80,7 +80,6 @@ describe('writeCard + readCard round-trip', () => {
 
   beforeEach(() => {
     boardRoot = makeTempDir();
-    resetMockConfig();
   });
 
   afterEach(() => removeTempDir(boardRoot));
@@ -190,23 +189,11 @@ describe('readManifest', () => {
 
   beforeEach(() => {
     boardRoot = makeTempDir();
-    resetMockConfig();
   });
 
   afterEach(() => removeTempDir(boardRoot));
 
-  it('reads a v1 manifest and injects tags/tagColorTarget/showCardAge from config', () => {
-    writeMinimalManifest(boardRoot);
-    setMockConfig({ tags: { bug: { color: '#ff0000', weight: 10 } }, tagColorTarget: 'card-border', showCardAge: false });
-
-    const manifest = readManifest(boardRoot);
-
-    expect(manifest.tags).toEqual({ bug: { color: '#ff0000', weight: 10 } });
-    expect(manifest.tagColorTarget).toBe('card-border');
-    expect(manifest.showCardAge).toBe(false);
-  });
-
-  it('returns an array of Column objects with correct shape for a v1 manifest', () => {
+  it('reads a v1 manifest and returns column array', () => {
     writeMinimalManifest(boardRoot);
 
     const manifest = readManifest(boardRoot);
@@ -216,12 +203,6 @@ describe('readManifest', () => {
   });
 
   describe('v3 migration (object-format columns → Column[] array)', () => {
-    /**
-     * @spec MIG-001
-     * @contract v3 manifests with object-shaped columns must be migrated to v1
-     *   Column[] format on read. This migration must not be removed without updating
-     *   all user data upgrade paths.
-     */
     it('migrates object-format columns to a Column array', () => {
       const v3Manifest = {
         version: 3,
@@ -287,11 +268,6 @@ describe('readManifest', () => {
   });
 
   describe('v4 migration (strips persisted cards arrays from columns)', () => {
-    /**
-     * @spec MIG-002
-     * @contract v4 manifests that persisted card IDs inside columns must have
-     *   those arrays stripped on read. Card placement is derived from card files only.
-     */
     it('strips cards arrays from v4 column objects', () => {
       const v4Manifest = {
         version: 4,
@@ -314,7 +290,7 @@ describe('readManifest', () => {
       }
     });
 
-    it('adds a policies object when a v4 column is missing it', () => {
+    it('adds a policies array when a v4 column is missing it', () => {
       const v4Manifest = {
         version: 4,
         columns: [
@@ -340,18 +316,11 @@ describe('writeManifest', () => {
 
   beforeEach(() => {
     boardRoot = makeTempDir();
-    resetMockConfig();
     writeMinimalManifest(boardRoot);
   });
 
   afterEach(() => removeTempDir(boardRoot));
 
-  /**
-   * @spec IO-001
-   * @contract writeManifest must never persist runtime-only fields (tags,
-   *   tagColorTarget, showCardAge) or in-memory column cards arrays.
-   *   These are injected on read from VSCode settings and card files respectively.
-   */
   it('does not write tags to the manifest file', () => {
     const manifest = readManifest(boardRoot);
     manifest.tags = { bug: { color: '#ff0000', weight: 5 } };
@@ -414,18 +383,12 @@ describe('loadBoardState', () => {
 
   beforeEach(() => {
     boardRoot = makeTempDir();
-    resetMockConfig();
     writeMinimalManifest(boardRoot);
     fs.mkdirSync(path.join(boardRoot, 'cards'), { recursive: true });
   });
 
   afterEach(() => removeTempDir(boardRoot));
 
-  /**
-   * @spec STATE-001
-   * @contract Cards must be grouped into the column identified by their own
-   *   `column` metadata field, not by any manifest-level list.
-   */
   it('groups cards into columns based on each card\'s own column metadata field', () => {
     writeCard(boardRoot, makeCard('card-a', { column: 'backlog',      order: '0.5' }));
     writeCard(boardRoot, makeCard('card-b', { column: 'in-progress',  order: '0.5' }));
@@ -442,11 +405,6 @@ describe('loadBoardState', () => {
     expect(done.cards).toEqual(['card-c']);
   });
 
-  /**
-   * @spec STATE-002
-   * @contract A card with no `column` field must be placed in the first column
-   *   of the manifest (defaultColumnId). This is the canonical fallback.
-   */
   it('places a card with no column field into the first (default) column', () => {
     const card = makeCard('no-col', { column: undefined, order: '0.5' });
     writeCard(boardRoot, card);
@@ -457,11 +415,6 @@ describe('loadBoardState', () => {
     expect(firstCol.cards).toContain('no-col');
   });
 
-  /**
-   * @spec STATE-003
-   * @contract Cards referencing a column id that does not exist in the manifest
-   *   must fall back to the first column rather than being silently dropped.
-   */
   it('falls back a card with an unknown column to the first column', () => {
     const card = makeCard('unknown-col', { column: 'nonexistent-column', order: '0.5' });
     writeCard(boardRoot, card);
@@ -472,11 +425,6 @@ describe('loadBoardState', () => {
     expect(firstCol.cards).toContain('unknown-col');
   });
 
-  /**
-   * @spec STATE-004
-   * @contract Cards within a column must be sorted by their `order` value
-   *   ascending (lower order = closer to the top of the column).
-   */
   it('sorts cards within a column by order ascending', () => {
     writeCard(boardRoot, makeCard('card-high',  { column: 'backlog', order: '0.75' }));
     writeCard(boardRoot, makeCard('card-low',   { column: 'backlog', order: '0.25' }));
@@ -488,11 +436,6 @@ describe('loadBoardState', () => {
     expect(backlog.cards).toEqual(['card-low', 'card-mid', 'card-high']);
   });
 
-  /**
-   * @spec STATE-005
-   * @contract Cards that have no `order` field must fall back to `created_at`
-   *   for sort order so that pre-order-field cards remain stable.
-   */
   it('falls back to created_at for sort key when order field is absent', () => {
     writeCard(boardRoot, makeCard('newer', { column: 'backlog', order: undefined, created_at: '2024-02-01T00:00:00.000Z' }));
     writeCard(boardRoot, makeCard('older', { column: 'backlog', order: undefined, created_at: '2024-01-01T00:00:00.000Z' }));
@@ -504,7 +447,6 @@ describe('loadBoardState', () => {
   });
 
   it('returns an empty cards array for a column that has no cards', () => {
-    // Only backlog gets a card.
     writeCard(boardRoot, makeCard('only-card', { column: 'backlog', order: '0.5' }));
 
     const { manifest } = loadBoardState(boardRoot);
@@ -545,7 +487,6 @@ describe('loadBoardState', () => {
   });
 
   it('works correctly when the cards directory does not exist yet', () => {
-    // Remove the cards directory we created in beforeEach.
     fs.rmSync(path.join(boardRoot, 'cards'), { recursive: true, force: true });
 
     const { manifest } = loadBoardState(boardRoot);
@@ -563,7 +504,6 @@ describe('withLock', () => {
 
   beforeEach(() => {
     boardRoot = makeTempDir();
-    resetMockConfig();
   });
 
   afterEach(() => removeTempDir(boardRoot));
@@ -595,14 +535,9 @@ describe('withLock', () => {
   });
 
   it('times out and throws when lock file is held by a non-existent process', () => {
-    // Plant a stale lock with a PID that cannot be alive.
     const lockPath = path.join(boardRoot, 'manifest.lock');
     fs.writeFileSync(lockPath, '99999999'); // extremely unlikely real PID
 
-    // Patch LOCK_TIMEOUT_MS by using a short timeout; we do this by relying on
-    // the actual 3 000 ms timeout only if the OS confirms the fake PID is dead.
-    // Because PID 99999999 almost certainly doesn't exist, the implementation
-    // will unlink the stale lock and retry — so the second call succeeds.
     const result = withLock(boardRoot, () => 'recovered');
     expect(result).toBe('recovered');
   }, 10000);

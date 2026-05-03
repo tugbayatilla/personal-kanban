@@ -7,7 +7,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as vscode from 'vscode';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -72,19 +71,12 @@ export interface MetricsData {
 
 // ── Card loading ─────────────────────────────────────────────────────────────
 
-export function loadAllCardFiles(boardRoot: string): CardSummary[] {
-  const cfg = vscode.workspace.getConfiguration('personal-kanban');
-  const wsRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-
-  const customCards = cfg.get<string>('cardsFolderPath', '');
-  const cardsDir = customCards && wsRoot
-    ? path.resolve(wsRoot, customCards)
-    : path.join(boardRoot, 'cards');
-
-  const customArchive = cfg.get<string>('archiveFolderPath', '');
-  const archiveDir = customArchive && wsRoot
-    ? path.resolve(wsRoot, customArchive)
-    : path.join(boardRoot, 'archive');
+export function loadAllCardFiles(
+  boardRoot: string,
+  options?: { cardsDir?: string; archiveDir?: string }
+): CardSummary[] {
+  const cardsDir = options?.cardsDir ?? path.join(boardRoot, 'cards');
+  const archiveDir = options?.archiveDir ?? path.join(boardRoot, 'archive');
 
   const cards: CardSummary[] = [];
   for (const dir of [cardsDir, archiveDir]) {
