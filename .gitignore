@@ -2,6 +2,7 @@
 node_modules/
 dist/
 *.vsix
+tsconfig.tsbuildinfo
 
 .personal-kanban/
 .env
