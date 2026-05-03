@@ -33,6 +33,15 @@
       } else if (editingCardId === null) {
         render();
       }
+      applyTheme(msg.manifest && msg.manifest.theme);
+    } else if (msg.type === 'injectTheme') {
+      var styleEl = document.getElementById('custom-theme');
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'custom-theme';
+        document.head.appendChild(styleEl);
+      }
+      styleEl.textContent = msg.css;
     }
   });
 
@@ -46,6 +55,20 @@
   }, 500);
 
   // ── Rendering ───────────────────────────────────────────────────────────────
+
+  function applyTheme(theme) {
+    // Remove any existing theme classes
+    document.body.className = document.body.className
+      .replace(/\btheme-\w+\b/g, '')
+      .trim();
+
+    if (!theme || theme === 'default') return;
+
+    if (!theme.endsWith('.css')) {
+      document.body.classList.add('theme-' + theme);
+    }
+    // Custom CSS is handled via injectTheme message
+  }
 
   function render() {
     const board = document.getElementById('board');
