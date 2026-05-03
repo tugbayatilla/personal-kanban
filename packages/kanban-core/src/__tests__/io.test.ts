@@ -202,6 +202,30 @@ describe('readManifest', () => {
     expect(manifest.columns[0]).toMatchObject({ id: 'backlog', label: 'Backlog', index: 0 });
   });
 
+  it('preserves theme field when reading manifest with theme set', () => {
+    writeMinimalManifest(boardRoot, { theme: 'compact' });
+
+    const manifest = readManifest(boardRoot);
+
+    expect(manifest.theme).toBe('compact');
+  });
+
+  it('returns undefined theme when manifest has no theme field', () => {
+    writeMinimalManifest(boardRoot);
+
+    const manifest = readManifest(boardRoot);
+
+    expect(manifest.theme).toBeUndefined();
+  });
+
+  it('preserves custom CSS theme path when reading manifest', () => {
+    writeMinimalManifest(boardRoot, { theme: 'my-theme.css' });
+
+    const manifest = readManifest(boardRoot);
+
+    expect(manifest.theme).toBe('my-theme.css');
+  });
+
   describe('v3 migration (object-format columns → Column[] array)', () => {
     it('migrates object-format columns to a Column array', () => {
       const v3Manifest = {
