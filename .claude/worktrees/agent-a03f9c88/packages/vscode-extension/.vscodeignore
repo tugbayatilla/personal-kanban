@@ -1,0 +1,13 @@
+.claude/
+src/
+node_modules/
+scripts/
+*.ts
+esbuild.js
+.eslintrc*
+tsconfig*
+plan*.md
+mvp*.md
+package-lock.json
+.env
+.personal-kanban/

@@ -1,0 +1,8 @@
+.DS_Store
+node_modules/
+dist/
+*.vsix
+tsconfig.tsbuildinfo
+
+.personal-kanban/
+.env

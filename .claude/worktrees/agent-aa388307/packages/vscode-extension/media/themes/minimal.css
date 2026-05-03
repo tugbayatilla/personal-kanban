@@ -1,0 +1,27 @@
+.theme-minimal .card {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  padding: 4px 8px;
+}
+
+.theme-minimal .card:hover {
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  background: var(--vscode-editor-background, #1e1e1e);
+}
+
+.theme-minimal .card-tags {
+  display: none;
+}
+
+.theme-minimal .card:hover .card-tags {
+  display: flex;
+}
+
+.theme-minimal .card-meta {
+  display: none;
+}
+
+.theme-minimal .card:hover .card-meta {
+  display: block;
+}

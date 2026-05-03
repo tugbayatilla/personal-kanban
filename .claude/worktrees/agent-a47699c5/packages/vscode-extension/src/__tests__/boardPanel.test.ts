@@ -1,0 +1,920 @@
+/**
+ * Integration tests for BoardPanel message handlers — src/BoardPanel.ts
+ *
+ * Strategy: the BoardPanel constructor requires a VSCode WebviewPanel. Rather
+ * than instantiating the panel class directly (which drags in the full webview
+ * lifecycle), we call the extracted pure-logic helpers through the actual
+ * message handler by using a minimal fake panel object. Card file I/O is done
+ * against a real temporary directory so serialization bugs are caught.
+ *
+ * The `_handleMessage` method is private. We access it via a type cast. If the
+ * method is ever renamed the TypeScript compiler will surface the break.
+ *
+ * Directory layout used in every test:
+ *   workspaceRoot   = tmpdir                  (passed to BoardPanel constructor)
+ *   boardFolderName = 'board'                 (set in mock config)
+ *   boardRoot       = tmpdir/board            (where manifest.json + cards/ live)
+ *
+ * getBoardRoot() returns path.join(workspaceRoot, boardFolderName), so the
+ * panel writes files into boardRoot without any path.join('.') ambiguity.
+ *
+ * Coverage:
+ *   - addCard:      file created with correct column and order; order = midpoint(last, 1)
+ *   - moveCard:     only moved card's column and order change; active_at stamped when
+ *                   moving to in-progress; done_at stamped when moving to done;
+ *                   no other cards are modified
+ *   - deleteCard:   card file deleted; column read from card metadata not manifest
+ *   - archiveDone:  done cards get archived_at; moved to archive/; manifest not written
+ */
+
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { resetMockConfig, setMockConfig, window as mockWindow } from './__mocks__/vscode';
+import { readCard, writeCard } from '../io';
+import { initLogger } from '../hooks';
+import { Card, WebviewMessage } from '../types';
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const BOARD_FOLDER_NAME = 'board';
+
+// ── Shared helpers ────────────────────────────────────────────────────────────
+
+function makeTempDir(): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'pk-board-test-'));
+}
+
+function removeTempDir(dir: string): void {
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+/** Returns the boardRoot (workspaceRoot/board) for a given workspaceRoot. */
+function toBoardRoot(workspaceRoot: string): string {
+  return path.join(workspaceRoot, BOARD_FOLDER_NAME);
+}
+
+function writeMinimalManifest(boardRoot: string, wipLimit: number | null = null): void {
+  const manifest = {
+    version: 1,
+    name: 'Test Board',
+    columns: [
+      { id: 'backlog',      label: 'Backlog',      index: 0, wip_limit: null,     policies: [] },
+      { id: 'in-progress',  label: 'In Progress',  index: 1, wip_limit: wipLimit, policies: [] },
+      { id: 'done',         label: 'Done',          index: 2, wip_limit: null,     policies: [] },
+    ],
+    column_stamps: { active_at: 'in-progress', done_at: 'done' },
+    scripts: {},
+    hooks: {},
+  };
+  fs.mkdirSync(boardRoot, { recursive: true });
+  fs.writeFileSync(path.join(boardRoot, 'manifest.json'), JSON.stringify(manifest, null, 2));
+}
+
+/** Writes a manifest where moving to 'done' requires policy script approval. */
+function writeManifestWithPolicyScript(boardRoot: string, scriptFile: string): void {
+  const manifest = {
+    version: 1,
+    name: 'Test Board',
+    columns: [
+      { id: 'backlog',     label: 'Backlog',     index: 0, wip_limit: null, policies: [] },
+      { id: 'in-progress', label: 'In Progress', index: 1, wip_limit: null, policies: [] },
+      { id: 'done',        label: 'Done',        index: 2, wip_limit: null, policies: ['entry:done'] },
+    ],
+    policies: {
+      'entry:done': {
+        description: 'Acceptance required.',
+        message: 'Card has not been accepted.',
+        script: scriptFile,
+      },
+    },
+    board_policies: [],
+    column_stamps: { active_at: 'in-progress', done_at: 'done' },
+    scripts: {},
+    hooks: {},
+  };
+  fs.mkdirSync(boardRoot, { recursive: true });
+  fs.writeFileSync(path.join(boardRoot, 'manifest.json'), JSON.stringify(manifest, null, 2));
+}
+
+function makeCard(id: string, overrides: Partial<Card['metadata']> = {}): Card {
+  return {
+    id,
+    content: `# Task ${id}`,
+    metadata: {
+      created_at: '2024-01-15T10:00:00.000Z',
+      column: 'backlog',
+      order: '0.5',
+      ...overrides,
+    },
+  };
+}
+
+/**
+ * Construct a BoardPanel instance and invoke its private `_handleMessage`.
+ *
+ * `workspaceRoot` is the temp directory. The panel resolves boardRoot via
+ * getBoardRoot(workspaceRoot), which returns path.join(workspaceRoot, boardFolderName).
+ * boardFolderName is set to BOARD_FOLDER_NAME in the mock config before each test.
+ */
+async function callHandler(
+  workspaceRoot: string,
+  msg: WebviewMessage
+): Promise<void> {
+  // Lazy-require so the test module resolution uses the active mock registry.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { BoardPanel } = require('../BoardPanel') as typeof import('../BoardPanel');
+
+  const fakeWebviewPanel = {
+    webview: {
+      html: '',
+      onDidReceiveMessage: jest.fn(),
+      postMessage: jest.fn(),
+      asWebviewUri: (uri: { fsPath: string }) => uri,
+      cspSource: 'vscode-resource:',
+    },
+    onDidDispose: jest.fn(),
+    onDidChangeViewState: jest.fn(),
+    reveal: jest.fn(),
+    dispose: jest.fn(),
+  };
+
+  const fakeExtensionUri = { fsPath: '/fake/extension' };
+
+  const PanelClass = BoardPanel as unknown as {
+    new (
+      panel: typeof fakeWebviewPanel,
+      workspaceRoot: string,
+      extensionUri: typeof fakeExtensionUri
+    ): { _handleMessage(msg: WebviewMessage): Promise<void> };
+  };
+
+  const instance = new PanelClass(fakeWebviewPanel as never, workspaceRoot, fakeExtensionUri as never);
+  await instance._handleMessage(msg);
+}
+
+// ── Test suites ───────────────────────────────────────────────────────────────
+
+describe('BoardPanel message handler', () => {
+  let workspaceRoot: string;
+  let boardRoot: string;
+
+  beforeEach(() => {
+    workspaceRoot = makeTempDir();
+    boardRoot = toBoardRoot(workspaceRoot);
+
+    resetMockConfig();
+    setMockConfig({ boardFolderName: BOARD_FOLDER_NAME, enableHooks: false });
+
+    writeMinimalManifest(boardRoot);
+    fs.mkdirSync(path.join(boardRoot, 'cards'), { recursive: true });
+
+    initLogger({ appendLine: () => {}, show: () => {}, dispose: () => {} } as never);
+  });
+
+  afterEach(() => {
+    removeTempDir(workspaceRoot);
+    // Reset static currentPanel reference so tests are isolated.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { BoardPanel } = require('../BoardPanel') as typeof import('../BoardPanel');
+      (BoardPanel as { currentPanel: unknown }).currentPanel = undefined;
+    } catch {
+      // module may have been cleared
+    }
+  });
+
+  // ── addCard ────────────────────────────────────────────────────────────────
+
+  describe('addCard', () => {
+    /**
+     * @spec PANEL-001
+     * @contract addCard must create a card file in cards/ with the correct
+     *   column field set to the requested columnId. The manifest must not be
+     *   written as part of this operation.
+     */
+    it('creates a card file in the cards directory', async () => {
+      await callHandler(workspaceRoot, { type: 'addCard', columnId: 'backlog' });
+
+      const files = fs.readdirSync(path.join(boardRoot, 'cards')).filter((f) => f.endsWith('.md'));
+      expect(files).toHaveLength(1);
+    });
+
+    it('writes the requested columnId into the new card metadata', async () => {
+      await callHandler(workspaceRoot, { type: 'addCard', columnId: 'in-progress' });
+
+      const files = fs.readdirSync(path.join(boardRoot, 'cards')).filter((f) => f.endsWith('.md'));
+      const id = files[0].replace('.md', '');
+      const card = readCard(boardRoot, id);
+
+      expect(card!.metadata.column).toBe('in-progress');
+    });
+
+    it('places the first card in an empty column at order 0.5 (midpoint of 0 and 1)', async () => {
+      await callHandler(workspaceRoot, { type: 'addCard', columnId: 'backlog' });
+
+      const files = fs.readdirSync(path.join(boardRoot, 'cards')).filter((f) => f.endsWith('.md'));
+      const card = readCard(boardRoot, files[0].replace('.md', ''));
+
+      expect(parseFloat(card!.metadata.order!)).toBe(0.5);
+    });
+
+    it('places a second card at the midpoint of the last card order and 1', async () => {
+      writeCard(boardRoot, makeCard('existing', { column: 'backlog', order: '0.5' }));
+
+      await callHandler(workspaceRoot, { type: 'addCard', columnId: 'backlog' });
+
+      const files = fs.readdirSync(path.join(boardRoot, 'cards'))
+        .filter((f) => f.endsWith('.md') && !f.startsWith('existing'));
+      const newCard = readCard(boardRoot, files[0].replace('.md', ''));
+
+      // (0.5 + 1) / 2 = 0.75
+      expect(parseFloat(newCard!.metadata.order!)).toBe(0.75);
+    });
+
+    it('does not modify the manifest.json file', async () => {
+      const before = fs.readFileSync(path.join(boardRoot, 'manifest.json'), 'utf-8');
+
+      await callHandler(workspaceRoot, { type: 'addCard', columnId: 'backlog' });
+
+      const after = fs.readFileSync(path.join(boardRoot, 'manifest.json'), 'utf-8');
+      expect(after).toBe(before);
+    });
+  });
+
+  // ── moveCard ───────────────────────────────────────────────────────────────
+
+  describe('moveCard', () => {
+    /**
+     * @spec PANEL-002
+     * @contract moveCard must update only the moved card's column and order fields.
+     *   No other card files must be modified. The manifest must not be written.
+     */
+    it('updates the moved card column to the destination column', async () => {
+      writeCard(boardRoot, makeCard('card-1', { column: 'backlog', order: '0.5' }));
+
+      await callHandler(workspaceRoot, {
+        type: 'moveCard',
+        id: 'card-1',
+        fromColumn: 'backlog',
+        toColumn: 'in-progress',
+        toIndex: 0,
+      });
+
+      const updated = readCard(boardRoot, 'card-1');
+      expect(updated!.metadata.column).toBe('in-progress');
+    });
+
+    it('updates the moved card order to the midpoint of its new position', async () => {
+      writeCard(boardRoot, makeCard('card-1', { column: 'backlog', order: '0.5' }));
+      // in-progress is empty; inserting at index 0 → midpoint(0, 1) = 0.5
+      await callHandler(workspaceRoot, {
+        type: 'moveCard',
+        id: 'card-1',
+        fromColumn: 'backlog',
+        toColumn: 'in-progress',
+        toIndex: 0,
+      });
+
+      const updated = readCard(boardRoot, 'card-1');
+      expect(parseFloat(updated!.metadata.order!)).toBe(0.5);
+    });
+
+    it('does not modify sibling cards in the source column', async () => {
+      writeCard(boardRoot, makeCard('card-1', { column: 'backlog', order: '0.25' }));
+      writeCard(boardRoot, makeCard('card-2', { column: 'backlog', order: '0.5'  }));
+
+      const card2MtimeBefore = fs.statSync(path.join(boardRoot, 'cards', 'card-2.md')).mtimeMs;
+
+      await callHandler(workspaceRoot, {
+        type: 'moveCard',
+        id: 'card-1',
+        fromColumn: 'backlog',
+        toColumn: 'in-progress',
+        toIndex: 0,
+      });
+
+      const card2MtimeAfter = fs.statSync(path.join(boardRoot, 'cards', 'card-2.md')).mtimeMs;
+      expect(card2MtimeAfter).toBe(card2MtimeBefore);
+    });
+
+    /**
+     * @spec PANEL-003
+     * @contract Moving a card to the in-progress column for the first time must
+     *   stamp active_at. Subsequent moves back into in-progress must NOT overwrite it.
+     */
+    it('stamps active_at on first move to the in-progress column', async () => {
+      writeCard(boardRoot, makeCard('card-1', { column: 'backlog', order: '0.5', active_at: undefined }));
+
+      await callHandler(workspaceRoot, {
+        type: 'moveCard',
+        id: 'card-1',
+        fromColumn: 'backlog',
+        toColumn: 'in-progress',
+        toIndex: 0,
+      });
+
+      const updated = readCard(boardRoot, 'card-1');
+      expect(updated!.metadata.active_at).toBeDefined();
+      expect(updated!.metadata.active_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    });
+
+    it('does not overwrite an existing active_at when moving back to in-progress', async () => {
+      const originalActiveAt = '2024-01-10T08:00:00.000Z';
+      writeCard(boardRoot, makeCard('card-1', {
+        column: 'backlog',
+        order: '0.5',
+        active_at: originalActiveAt,
+      }));
+
+      await callHandler(workspaceRoot, {
+        type: 'moveCard',
+        id: 'card-1',
+        fromColumn: 'backlog',
+        toColumn: 'in-progress',
+        toIndex: 0,
+      });
+
+      const updated = readCard(boardRoot, 'card-1');
+      expect(updated!.metadata.active_at).toBe(originalActiveAt);
+    });
+
+    /**
+     * @spec PANEL-004
+     * @contract Moving a card to the done column must always stamp done_at.
+     */
+    it('stamps done_at when moving to the done column', async () => {
+      writeCard(boardRoot, makeCard('card-1', { column: 'in-progress', order: '0.5' }));
+
+      await callHandler(workspaceRoot, {
+        type: 'moveCard',
+        id: 'card-1',
+        fromColumn: 'in-progress',
+        toColumn: 'done',
+        toIndex: 0,
+      });
+
+      const updated = readCard(boardRoot, 'card-1');
+      expect(updated!.metadata.done_at).toBeDefined();
+      expect(updated!.metadata.done_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    });
+
+    it('does not stamp active_at when moving to a column other than in-progress', async () => {
+      writeCard(boardRoot, makeCard('card-1', {
+        column: 'backlog',
+        order: '0.5',
+        active_at: undefined,
+      }));
+
+      await callHandler(workspaceRoot, {
+        type: 'moveCard',
+        id: 'card-1',
+        fromColumn: 'backlog',
+        toColumn: 'done',
+        toIndex: 0,
+      });
+
+      const updated = readCard(boardRoot, 'card-1');
+      expect(updated!.metadata.active_at).toBeUndefined();
+    });
+
+    it('does not write the manifest file when moving a card', async () => {
+      writeCard(boardRoot, makeCard('card-1', { column: 'backlog', order: '0.5' }));
+      const before = fs.readFileSync(path.join(boardRoot, 'manifest.json'), 'utf-8');
+
+      await callHandler(workspaceRoot, {
+        type: 'moveCard',
+        id: 'card-1',
+        fromColumn: 'backlog',
+        toColumn: 'in-progress',
+        toIndex: 0,
+      });
+
+      const after = fs.readFileSync(path.join(boardRoot, 'manifest.json'), 'utf-8');
+      expect(after).toBe(before);
+    });
+  });
+
+  // ── policy approval ────────────────────────────────────────────────────────
+
+  describe('moveCard — policy approval', () => {
+    const SCRIPTS_DIR = 'scripts';
+
+    beforeEach(() => {
+      fs.mkdirSync(path.join(boardRoot, SCRIPTS_DIR), { recursive: true });
+      // Write a minimal lib.js so policy scripts can require('./lib').
+      const lib = `
+        'use strict';
+        function readPayload(_name, cb) {
+          let raw = '';
+          process.stdin.setEncoding('utf8');
+          process.stdin.on('data', c => { raw += c; });
+          process.stdin.on('end', () => { cb(JSON.parse(raw)); });
+        }
+        module.exports = { readPayload };
+      `;
+      fs.writeFileSync(path.join(boardRoot, SCRIPTS_DIR, 'lib.js'), lib);
+      mockWindow.showWarningMessage.mockReset();
+    });
+
+    /**
+     * @spec PANEL-007
+     * @contract When a policy script exits 0, the move must proceed without
+     *   showing any approval dialog.
+     */
+    it('proceeds without dialog when policy script exits 0', async () => {
+      const script = `
+        const { readPayload } = require('./lib');
+        readPayload('p', () => { process.exit(0); });
+      `;
+      fs.writeFileSync(path.join(boardRoot, SCRIPTS_DIR, 'policy-ok.js'), script);
+      writeManifestWithPolicyScript(boardRoot, `${SCRIPTS_DIR}/policy-ok.js`);
+      writeCard(boardRoot, makeCard('card-1', { column: 'in-progress', order: '0.5' }));
+
+      await callHandler(workspaceRoot, {
+        type: 'moveCard', id: 'card-1',
+        fromColumn: 'in-progress', toColumn: 'done', toIndex: 0,
+      });
+
+      expect(mockWindow.showWarningMessage).not.toHaveBeenCalled();
+      expect(readCard(boardRoot, 'card-1')!.metadata.column).toBe('done');
+    });
+
+    /**
+     * @spec PANEL-008
+     * @contract When a policy script exits 1 and the user clicks Continue Anyway,
+     *   the move must be committed.
+     */
+    it('commits move when policy script exits 1 and user approves', async () => {
+      const script = `
+        const { readPayload } = require('./lib');
+        readPayload('p', () => { process.exit(1); });
+      `;
+      fs.writeFileSync(path.join(boardRoot, SCRIPTS_DIR, 'policy-violated.js'), script);
+      writeManifestWithPolicyScript(boardRoot, `${SCRIPTS_DIR}/policy-violated.js`);
+      writeCard(boardRoot, makeCard('card-1', { column: 'in-progress', order: '0.5' }));
+
+      mockWindow.showWarningMessage.mockResolvedValue('Continue Anyway');
+
+      await callHandler(workspaceRoot, {
+        type: 'moveCard', id: 'card-1',
+        fromColumn: 'in-progress', toColumn: 'done', toIndex: 0,
+      });
+
+      expect(mockWindow.showWarningMessage).toHaveBeenCalledTimes(1);
+      expect(readCard(boardRoot, 'card-1')!.metadata.column).toBe('done');
+    });
+
+    /**
+     * @spec PANEL-009
+     * @contract When a policy script exits 1 and the user cancels, the move must
+     *   be aborted and the card must remain in its original column.
+     */
+    it('aborts move when policy script exits 1 and user cancels', async () => {
+      const script = `
+        const { readPayload } = require('./lib');
+        readPayload('p', () => { process.exit(1); });
+      `;
+      fs.writeFileSync(path.join(boardRoot, SCRIPTS_DIR, 'policy-violated.js'), script);
+      writeManifestWithPolicyScript(boardRoot, `${SCRIPTS_DIR}/policy-violated.js`);
+      writeCard(boardRoot, makeCard('card-1', { column: 'in-progress', order: '0.5' }));
+
+      mockWindow.showWarningMessage.mockResolvedValue(undefined);
+
+      await callHandler(workspaceRoot, {
+        type: 'moveCard', id: 'card-1',
+        fromColumn: 'in-progress', toColumn: 'done', toIndex: 0,
+      });
+
+      expect(mockWindow.showWarningMessage).toHaveBeenCalledTimes(1);
+      expect(readCard(boardRoot, 'card-1')!.metadata.column).toBe('in-progress');
+    });
+
+    /**
+     * @spec PANEL-010
+     * @contract The approval dialog must display the policy message from the manifest.
+     */
+    it('shows the policy message in the approval dialog', async () => {
+      const script = `
+        const { readPayload } = require('./lib');
+        readPayload('p', () => { process.exit(1); });
+      `;
+      fs.writeFileSync(path.join(boardRoot, SCRIPTS_DIR, 'policy-violated.js'), script);
+      writeManifestWithPolicyScript(boardRoot, `${SCRIPTS_DIR}/policy-violated.js`);
+      writeCard(boardRoot, makeCard('card-1', { column: 'in-progress', order: '0.5' }));
+
+      mockWindow.showWarningMessage.mockResolvedValue(undefined);
+
+      await callHandler(workspaceRoot, {
+        type: 'moveCard', id: 'card-1',
+        fromColumn: 'in-progress', toColumn: 'done', toIndex: 0,
+      });
+
+      expect(mockWindow.showWarningMessage).toHaveBeenCalledWith(
+        'Card has not been accepted.',
+        { modal: true },
+        'Continue Anyway'
+      );
+    });
+
+    /**
+     * @spec PANEL-011
+     * @contract A card tagged with a bypass tag must skip all policy checks.
+     *   No dialog must be shown and the move must proceed.
+     */
+    it('skips all policy checks when card has a bypass tag', async () => {
+      const violated = `
+        const { readPayload } = require('./lib');
+        readPayload('p', () => { process.exit(1); });
+      `;
+      fs.writeFileSync(path.join(boardRoot, SCRIPTS_DIR, 'policy-violated.js'), violated);
+
+      const manifest = {
+        version: 1, name: 'Test Board',
+        columns: [
+          { id: 'backlog',     label: 'Backlog',     index: 0, wip_limit: null, policies: [] },
+          { id: 'in-progress', label: 'In Progress', index: 1, wip_limit: null, policies: [] },
+          { id: 'done',        label: 'Done',        index: 2, wip_limit: null, policies: ['entry:done'] },
+        ],
+        policies: {
+          'entry:done': { description: '', message: 'Needs acceptance.', script: `${SCRIPTS_DIR}/policy-violated.js` },
+        },
+        board_policies: [],
+        policy_bypass_tags: ['expedite'],
+        column_stamps: { active_at: 'in-progress', done_at: 'done' },
+        scripts: {}, hooks: {},
+      };
+      fs.writeFileSync(path.join(boardRoot, 'manifest.json'), JSON.stringify(manifest));
+
+      // Card with #expedite tag — should bypass the policy entirely.
+      const card = makeCard('card-1', { column: 'in-progress', order: '0.5' });
+      card.content = '# Task\n\n#expedite\n\nSome content.';
+      writeCard(boardRoot, card);
+
+      await callHandler(workspaceRoot, {
+        type: 'moveCard', id: 'card-1',
+        fromColumn: 'in-progress', toColumn: 'done', toIndex: 0,
+      });
+
+      expect(mockWindow.showWarningMessage).not.toHaveBeenCalled();
+      expect(readCard(boardRoot, 'card-1')!.metadata.column).toBe('done');
+    });
+
+    /**
+     * @spec PANEL-013
+     * @contract With multiple policy violations, dialogs appear in order.
+     *   Cancelling the first must abort the move without showing the second dialog.
+     */
+    it('stops at first cancellation without showing subsequent dialogs', async () => {
+      const violated = `
+        const { readPayload } = require('./lib');
+        readPayload('p', () => { process.exit(1); });
+      `;
+      fs.writeFileSync(path.join(boardRoot, SCRIPTS_DIR, 'p1.js'), violated);
+      fs.writeFileSync(path.join(boardRoot, SCRIPTS_DIR, 'p2.js'), violated);
+
+      const manifest = {
+        version: 1, name: 'Test Board',
+        columns: [
+          { id: 'backlog',     label: 'Backlog',     index: 0, wip_limit: null, policies: [] },
+          { id: 'in-progress', label: 'In Progress', index: 1, wip_limit: null, policies: [] },
+          { id: 'done',        label: 'Done',        index: 2, wip_limit: null, policies: ['p1', 'p2'] },
+        ],
+        policies: {
+          'p1': { description: '', message: 'First policy.',  script: `${SCRIPTS_DIR}/p1.js` },
+          'p2': { description: '', message: 'Second policy.', script: `${SCRIPTS_DIR}/p2.js` },
+        },
+        board_policies: [],
+        column_stamps: { active_at: 'in-progress', done_at: 'done' },
+        scripts: {}, hooks: {},
+      };
+      fs.writeFileSync(path.join(boardRoot, 'manifest.json'), JSON.stringify(manifest));
+      writeCard(boardRoot, makeCard('card-1', { column: 'in-progress', order: '0.5' }));
+
+      mockWindow.showWarningMessage.mockResolvedValue(undefined);
+
+      await callHandler(workspaceRoot, {
+        type: 'moveCard', id: 'card-1',
+        fromColumn: 'in-progress', toColumn: 'done', toIndex: 0,
+      });
+
+      expect(mockWindow.showWarningMessage).toHaveBeenCalledTimes(1);
+      expect(readCard(boardRoot, 'card-1')!.metadata.column).toBe('in-progress');
+    });
+  });
+
+  // ── deleteCard ─────────────────────────────────────────────────────────────
+
+  describe('deleteCard', () => {
+    /**
+     * @spec PANEL-005
+     * @contract deleteCard must delete the card .md file from the cards/
+     *   directory. The column to delete from is read from the card metadata —
+     *   not from the manifest.
+     */
+    it('removes the card file from the cards directory', async () => {
+      writeCard(boardRoot, makeCard('card-to-delete', { column: 'backlog', order: '0.5' }));
+
+      await callHandler(workspaceRoot, { type: 'deleteCard', id: 'card-to-delete' });
+
+      expect(fs.existsSync(path.join(boardRoot, 'cards', 'card-to-delete.md'))).toBe(false);
+    });
+
+    it('does not remove other card files when deleting one card', async () => {
+      writeCard(boardRoot, makeCard('target',    { column: 'backlog', order: '0.25' }));
+      writeCard(boardRoot, makeCard('bystander', { column: 'backlog', order: '0.5'  }));
+
+      await callHandler(workspaceRoot, { type: 'deleteCard', id: 'target' });
+
+      expect(fs.existsSync(path.join(boardRoot, 'cards', 'bystander.md'))).toBe(true);
+    });
+
+    it('does not throw when asked to delete a card that does not exist', async () => {
+      await expect(
+        callHandler(workspaceRoot, { type: 'deleteCard', id: 'ghost-card' })
+      ).resolves.not.toThrow();
+    });
+
+    it('does not write the manifest file when deleting a card', async () => {
+      writeCard(boardRoot, makeCard('card-del', { column: 'backlog', order: '0.5' }));
+      const before = fs.readFileSync(path.join(boardRoot, 'manifest.json'), 'utf-8');
+
+      await callHandler(workspaceRoot, { type: 'deleteCard', id: 'card-del' });
+
+      const after = fs.readFileSync(path.join(boardRoot, 'manifest.json'), 'utf-8');
+      expect(after).toBe(before);
+    });
+  });
+
+  // ── archiveDone ────────────────────────────────────────────────────────────
+
+  describe('archiveDone', () => {
+    /**
+     * @spec PANEL-006
+     * @contract archiveDone must move all cards in the done column to archive/
+     *   and stamp archived_at on each. The manifest must not be written.
+     */
+    it('moves done cards to the archive directory', async () => {
+      writeCard(boardRoot, makeCard('done-1', { column: 'done', order: '0.5'  }));
+      writeCard(boardRoot, makeCard('done-2', { column: 'done', order: '0.75' }));
+
+      await callHandler(workspaceRoot, { type: 'archiveDone' });
+
+      expect(fs.existsSync(path.join(boardRoot, 'archive', 'done-1.md'))).toBe(true);
+      expect(fs.existsSync(path.join(boardRoot, 'archive', 'done-2.md'))).toBe(true);
+    });
+
+    it('removes done card files from the cards directory after archiving', async () => {
+      writeCard(boardRoot, makeCard('done-card', { column: 'done', order: '0.5' }));
+
+      await callHandler(workspaceRoot, { type: 'archiveDone' });
+
+      expect(fs.existsSync(path.join(boardRoot, 'cards', 'done-card.md'))).toBe(false);
+    });
+
+    it('stamps archived_at on each archived card', async () => {
+      writeCard(boardRoot, makeCard('done-arch', { column: 'done', order: '0.5' }));
+
+      await callHandler(workspaceRoot, { type: 'archiveDone' });
+
+      const archived = readCard(boardRoot, 'done-arch');
+      expect(archived!.metadata.archived_at).toBeDefined();
+      expect(archived!.metadata.archived_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    });
+
+    it('does not archive cards that are not in the done column', async () => {
+      writeCard(boardRoot, makeCard('active-card', { column: 'in-progress', order: '0.5' }));
+
+      await callHandler(workspaceRoot, { type: 'archiveDone' });
+
+      expect(fs.existsSync(path.join(boardRoot, 'cards', 'active-card.md'))).toBe(true);
+      expect(fs.existsSync(path.join(boardRoot, 'archive', 'active-card.md'))).toBe(false);
+    });
+
+    it('does not write the manifest file when archiving done cards', async () => {
+      writeCard(boardRoot, makeCard('done-m', { column: 'done', order: '0.5' }));
+      const before = fs.readFileSync(path.join(boardRoot, 'manifest.json'), 'utf-8');
+
+      await callHandler(workspaceRoot, { type: 'archiveDone' });
+
+      const after = fs.readFileSync(path.join(boardRoot, 'manifest.json'), 'utf-8');
+      expect(after).toBe(before);
+    });
+
+    it('does nothing when the done column is empty', async () => {
+      writeCard(boardRoot, makeCard('active', { column: 'backlog', order: '0.5' }));
+
+      await expect(
+        callHandler(workspaceRoot, { type: 'archiveDone' })
+      ).resolves.not.toThrow();
+
+      const archiveDir = path.join(boardRoot, 'archive');
+      const archiveFiles = fs.existsSync(archiveDir) ? fs.readdirSync(archiveDir) : [];
+      expect(archiveFiles).toHaveLength(0);
+    });
+  });
+
+  // ── external card move hook firing ────────────────────────────────────────
+
+  describe('external card move hook firing', () => {
+    /**
+     * Helper: instantiate a BoardPanel and expose _handleExternalCardChange and
+     * _cardColumns so tests can simulate what the FileSystemWatcher fires.
+     */
+    function makePanel(workspaceRoot: string): {
+      handleExternalCardChange(uri: { fsPath: string }): void;
+      cardColumns: Map<string, string>;
+      postedMessages: unknown[];
+    } {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { BoardPanel } = require('../BoardPanel') as typeof import('../BoardPanel');
+
+      const postedMessages: unknown[] = [];
+      const fakeWebviewPanel = {
+        webview: {
+          html: '',
+          onDidReceiveMessage: jest.fn(),
+          postMessage: jest.fn((msg: unknown) => postedMessages.push(msg)),
+          asWebviewUri: (uri: { fsPath: string }) => uri,
+          cspSource: 'vscode-resource:',
+        },
+        onDidDispose: jest.fn(),
+        onDidChangeViewState: jest.fn(),
+        reveal: jest.fn(),
+        dispose: jest.fn(),
+      };
+
+      const PanelClass = BoardPanel as unknown as {
+        new (
+          panel: typeof fakeWebviewPanel,
+          workspaceRoot: string,
+          extensionUri: { fsPath: string }
+        ): {
+          _handleExternalCardChange(uri: { fsPath: string }): void;
+          _cardColumns: Map<string, string>;
+        };
+      };
+
+      const instance = new PanelClass(fakeWebviewPanel as never, workspaceRoot, { fsPath: '/fake/extension' } as never);
+      return {
+        handleExternalCardChange: (uri) => instance._handleExternalCardChange(uri as never),
+        cardColumns: instance._cardColumns,
+        postedMessages,
+      };
+    }
+
+    it('fires card.moved hook when a card file is externally moved to a new column', async () => {
+      const hooksModule = await import('../hooks');
+      const spy = jest.spyOn(hooksModule, 'fireHook').mockImplementation(() => {});
+
+      writeCard(boardRoot, makeCard('ext-card', { column: 'backlog', order: '0.5' }));
+
+      const panel = makePanel(workspaceRoot);
+      // Seed the cache with the old column so a move is detected.
+      panel.cardColumns.set('ext-card', 'backlog');
+
+      // Simulate external edit: change column in file.
+      const card = readCard(boardRoot, 'ext-card')!;
+      card.metadata.column = 'in-progress';
+      writeCard(boardRoot, card);
+
+      panel.handleExternalCardChange({ fsPath: path.join(boardRoot, 'cards', 'ext-card.md') });
+
+      expect(spy).toHaveBeenCalledWith(
+        boardRoot,
+        expect.anything(),
+        'card.moved',
+        expect.objectContaining({ card_id: 'ext-card', from_column: 'backlog', to_column: 'in-progress' })
+      );
+
+      spy.mockRestore();
+    });
+
+    it('does not fire card.moved hook when column is unchanged', async () => {
+      const hooksModule = await import('../hooks');
+      const spy = jest.spyOn(hooksModule, 'fireHook').mockImplementation(() => {});
+
+      writeCard(boardRoot, makeCard('stable-card', { column: 'backlog', order: '0.5' }));
+
+      const panel = makePanel(workspaceRoot);
+      panel.cardColumns.set('stable-card', 'backlog');
+
+      // No column change — same value in file.
+      panel.handleExternalCardChange({ fsPath: path.join(boardRoot, 'cards', 'stable-card.md') });
+
+      expect(spy).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), 'card.moved', expect.anything());
+
+      spy.mockRestore();
+    });
+
+    it('does not fire card.moved hook when the card is first seen (no previous column in cache)', async () => {
+      const hooksModule = await import('../hooks');
+      const spy = jest.spyOn(hooksModule, 'fireHook').mockImplementation(() => {});
+
+      writeCard(boardRoot, makeCard('new-card', { column: 'in-progress', order: '0.5' }));
+
+      const panel = makePanel(workspaceRoot);
+      // Cache is empty — first time the watcher sees this card.
+
+      panel.handleExternalCardChange({ fsPath: path.join(boardRoot, 'cards', 'new-card.md') });
+
+      expect(spy).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), 'card.moved', expect.anything());
+
+      spy.mockRestore();
+    });
+
+    it('updates _cardColumns cache to the new column after an external move', () => {
+      writeCard(boardRoot, makeCard('cache-card', { column: 'backlog', order: '0.5' }));
+
+      const panel = makePanel(workspaceRoot);
+      panel.cardColumns.set('cache-card', 'backlog');
+
+      const card = readCard(boardRoot, 'cache-card')!;
+      card.metadata.column = 'done';
+      writeCard(boardRoot, card);
+
+      panel.handleExternalCardChange({ fsPath: path.join(boardRoot, 'cards', 'cache-card.md') });
+
+      expect(panel.cardColumns.get('cache-card')).toBe('done');
+    });
+  });
+
+  // ── policy-main-branch script ─────────────────────────────────────────────
+
+  describe('policy-main-branch script', () => {
+    const scriptPath = path.join(
+      __dirname,
+      '../../.personal-kanban/scripts/policy-main-branch.js'
+    );
+
+    function runScript(stdinPayload: object, env?: NodeJS.ProcessEnv): Promise<number> {
+      return new Promise((resolve) => {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { spawn } = require('child_process') as typeof import('child_process');
+        const child = spawn(process.execPath, [scriptPath], {
+          stdio: ['pipe', 'ignore', 'ignore'],
+          env: { ...process.env, ...env },
+        });
+        child.stdin.write(JSON.stringify(stdinPayload));
+        child.stdin.end();
+        child.on('close', (code) => resolve(code ?? 0));
+      });
+    }
+
+    it('exits 1 (policy violated) when on the main branch', async () => {
+      // Stub git to report 'main' by providing a fake git on PATH.
+      const fakeGitDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fake-git-'));
+      const fakeBranch = 'main';
+      const fakeGitScript = `#!/bin/sh\necho ${fakeBranch}\n`;
+      const fakeGitPath = path.join(fakeGitDir, 'git');
+      fs.writeFileSync(fakeGitPath, fakeGitScript, { mode: 0o755 });
+
+      const code = await runScript({ card_id: 'test', event: 'card.moving' }, {
+        PATH: `${fakeGitDir}:${process.env.PATH}`,
+      });
+
+      fs.rmSync(fakeGitDir, { recursive: true, force: true });
+      expect(code).toBe(1);
+    });
+
+    it('exits 1 (policy violated) when on the master branch', async () => {
+      const fakeGitDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fake-git-'));
+      const fakeGitScript = `#!/bin/sh\necho master\n`;
+      const fakeGitPath = path.join(fakeGitDir, 'git');
+      fs.writeFileSync(fakeGitPath, fakeGitScript, { mode: 0o755 });
+
+      const code = await runScript({ card_id: 'test', event: 'card.moving' }, {
+        PATH: `${fakeGitDir}:${process.env.PATH}`,
+      });
+
+      fs.rmSync(fakeGitDir, { recursive: true, force: true });
+      expect(code).toBe(1);
+    });
+
+    it('exits 0 (ok) when on a feature branch', async () => {
+      const fakeGitDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fake-git-'));
+      const fakeGitScript = `#!/bin/sh\necho feature/my-branch\n`;
+      const fakeGitPath = path.join(fakeGitDir, 'git');
+      fs.writeFileSync(fakeGitPath, fakeGitScript, { mode: 0o755 });
+
+      const code = await runScript({ card_id: 'test', event: 'card.moving' }, {
+        PATH: `${fakeGitDir}:${process.env.PATH}`,
+      });
+
+      fs.rmSync(fakeGitDir, { recursive: true, force: true });
+      expect(code).toBe(0);
+    });
+
+    it('exits 0 (ok) when git is unavailable', async () => {
+      // Provide a PATH with no git executable.
+      const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'no-git-'));
+
+      const code = await runScript({ card_id: 'test', event: 'card.moving' }, {
+        PATH: emptyDir,
+      });
+
+      fs.rmSync(emptyDir, { recursive: true, force: true });
+      expect(code).toBe(0);
+    });
+  });
+});
