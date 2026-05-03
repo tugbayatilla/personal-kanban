@@ -6,6 +6,7 @@ import { registerAdd } from './commands/add';
 import { registerMove } from './commands/move';
 import { registerDone } from './commands/done';
 import { registerArchive } from './commands/archive';
+import { registerServe } from './commands/serve';
 
 const program = new Command();
 program
@@ -19,5 +20,6 @@ registerAdd(program);
 registerMove(program);
 registerDone(program);
 registerArchive(program);
+registerServe(program);
 
 program.parse(process.argv);
